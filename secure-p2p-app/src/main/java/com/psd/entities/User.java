@@ -15,12 +15,16 @@ public class User {
     // Unique identifier for the user
     private String userID;
 
+    //Username
+    private String username;
+
     // Public and private key pair used for encryption and signing
     private PublicKey publicKey;
     private PrivateKey privateKey;
 
-    // IP address of the user in the P2P network
+    // IP address and Port of the user in the P2P network
     private String ipAddress;
+    private int port;
 
     // List of contacts (other users) the user communicates with
     private List<User> contacts;
@@ -36,18 +40,13 @@ public class User {
      * @param privateKey The private key used for decryption and signing.
      * @param ipAddress  The IP address of the user.
      */
-    public User(String userID, PublicKey publicKey, PrivateKey privateKey, String ipAddress) {
-        this.userID = userID;
+    public User(String userName, PublicKey publicKey, PrivateKey privateKey, String ipAddress, int port) {
+        this.userID = null;
+        this.username = userName;
         this.publicKey = publicKey;
         this.privateKey = privateKey;
         this.ipAddress = ipAddress;
-        this.contacts = new ArrayList<>();
-        this.conversations = new ArrayList<>();
-    }
-
-    public User(String userID, String ipAddress) {
-        this.userID = userID;
-        this.ipAddress = ipAddress;
+        this.port = port;
         this.contacts = new ArrayList<>();
         this.conversations = new ArrayList<>();
     }
@@ -90,7 +89,16 @@ public class User {
      * @param contact The new contact to be added.
      */
     public void addContact(User contact) {
-        //TODO
+        contacts.add(contact);
+    }
+
+    public User findContactByUsername(String username) {
+        for (User contact : contacts) {
+            if (contact.getUserName().equalsIgnoreCase(username)) {
+                return contact;
+            }
+        }
+        return null;
     }
 
     // Getters and setters for user attributes
@@ -102,6 +110,15 @@ public class User {
      */
     public String getUserID() {
         return userID;
+    }
+
+    /**
+     * Returns the user's unique identifier.
+     * 
+     * @return The userID of the user.
+     */
+    public String getUserName() {
+        return username;
     }
 
     /**
@@ -132,6 +149,15 @@ public class User {
     }
 
     /**
+     * Returns the user's IP address.
+     * 
+     * @return The IP address of the user.
+     */
+    public int getPort() {
+        return port;
+    }
+
+    /**
      * Returns the list of contacts the user has.
      * 
      * @return A list of contacts.
@@ -141,12 +167,31 @@ public class User {
     }
 
     /**
+     * Shows the list of contacts with their username, IP address, and port.
+     */
+    public void showContacts() {
+        if (contacts.isEmpty()) {
+            System.out.println("No contacts found.");
+        } else {
+            System.out.println("Contacts:");
+            for (User contact : contacts) {
+                System.out.println("Username: " + contact.getUserName() + " | IP Address: " + contact.getIpAddress() + " | Port: " + contact.getPort());
+            }
+        }
+    }
+
+    /**
      * Returns the list of conversations this user is part of.
      * 
      * @return A list of conversations.
      */
     public List<Conversation> getConversations() {
         return conversations;
+    }
+
+    @Override
+    public String toString() {
+        return username + " (" + ipAddress + ":" + port + ")";
     }
 
 }

@@ -12,28 +12,40 @@ import java.net.Socket;
 public class P2PServer {
 
     private int port;  // The port on which the server listens
-    private User currentUser;  // The user running this server
+    private ServerSocket serverSocket;
+    private volatile boolean running = true;
 
-    public P2PServer(int port, User currentUser) {
+    public P2PServer(int port) {
         this.port = port;
-        this.currentUser = currentUser;
     }
 
     /**
      * Starts the server to listen for incoming messages on the specified port.
      */
     public void start() throws IOException {
-        ServerSocket serverSocket = new ServerSocket(port);
-        System.out.println(currentUser.getUserID() + " is listening on port " + port);
+        serverSocket = new ServerSocket(port);
 
         // Continuously listen for incoming connections
-        while (true) {
+        while (running) {
             try {
                 Socket socket = serverSocket.accept();  // Accept incoming connection
                 new Thread(new ClientHandler(socket)).start();  // Handle each client in a new thread
             } catch (IOException e) {
                 e.printStackTrace();
             }
+        }
+    }
+
+    // Call this method to stop the server
+    public void stop() {
+        running = false;
+        try {
+            if (serverSocket != null && !serverSocket.isClosed()) {
+                serverSocket.close();
+                System.out.println("Server stopped.");
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
         }
     }
 

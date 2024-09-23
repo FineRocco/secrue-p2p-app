@@ -25,7 +25,7 @@ public class P2PClient {
         // Listen for messages from the peer
         String receivedMessage;
         while ((receivedMessage = in.readLine()) != null) {
-            System.out.println("Received: " + receivedMessage);
+            System.out.println("\nReceived: " + receivedMessage);
         }
     }
 }

@@ -3,7 +3,9 @@ package com.psd;
 import com.psd.entities.*;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Queue;
 
 /**
@@ -12,18 +14,18 @@ import java.util.Queue;
  */
 public class P2PNetwork {
 
-    // List of active peers (users) connected to the network
-    private List<User> activePeers;
-
     // A message queue for temporarily storing messages until they can be delivered
     private Queue<Message> messageQueue;
 
     //Port
     private int port;
 
+    // Track conversations based on participants' unique combination
+    private Map<String, Conversation> conversations;
+
     public P2PNetwork(int port) {
         this.port = port;
-        this.activePeers = new ArrayList<>(); 
+        this.conversations = new HashMap<>();
     }
 
     /**
@@ -32,21 +34,16 @@ public class P2PNetwork {
      * @param user The user that wants to join the network.
      * @return True if the user is successfully connected, false otherwise.
      */
-    public boolean connectPeer(User user) {
-        if (!activePeers.contains(user)) {
-            activePeers.add(user);
+    public void connectPeer(User user) {
             // Start the peer's server in a new thread using the network's port
             new Thread(() -> {
                 try {
-                    P2PServer server = new P2PServer(port, user);
+                    P2PServer server = new P2PServer(port);
                     server.start();  // This will listen in the background
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
             }).start();
-            return true;
-        }
-        return false;
     }
 
     /**
@@ -85,8 +82,7 @@ public class P2PNetwork {
 
     /**
      * Sends a direct message from the sender to the receiver.
-     * Since the User object no longer has a port, the receiver's port should
-     * be specified by the caller or pre-configured.
+     * If no existing conversation exists, a new one is created.
      * 
      * @param message The message to send.
      * @param sender The user sending the message.
@@ -96,10 +92,22 @@ public class P2PNetwork {
      */
     public boolean sendDirectMessage(Message message, User sender, User receiver, int receiverPort) {
         try {
-            // Create a client to send the message to the receiver's IP and port
+            // Check if conversation exists between sender and receiver
+            String conversationKey = getConversationKey(sender, receiver);
+            Conversation conversation = conversations.get(conversationKey);
+            
+            if (conversation == null) {
+                // Create a new conversation if one does not exist
+                conversation = new Conversation(sender, receiver);
+                conversations.put(conversationKey, conversation);
+            }
+
+            // Add the message to the conversation
+            conversation.addMessage(message);
+
+            // Send the message using the P2P client
             P2PClient client = new P2PClient(receiver.getIpAddress(), receiverPort);
             client.sendMessage(message.getContent());
-            //client.closeConnection();  // Close after sending
             return true;
         } catch (IOException e) {
             e.printStackTrace();
@@ -108,24 +116,19 @@ public class P2PNetwork {
     }
 
     /**
-     * Retrieves the list of all active peers connected to the P2P network.
+     * Creates a unique key for each conversation between two users.
      * 
-     * @return A list of active peers on the network.
+     * @param user1 The first participant
+     * @param user2 The second participant
+     * @return A string key representing the unique conversation
      */
-    public List<User> getActivePeers() {
-        // TODO
-        return null;
-    }
-
-    /**
-     * Synchronizes the network state among all active peers to ensure consistency.
-     * This could be used to ensure messages and connections are up to date.
-     * 
-     * @return True if the synchronization is successful, false otherwise.
-     */
-    public boolean synchronizeNetwork() {
-        // TODO
-        return false;
+    private String getConversationKey(User user1, User user2) {
+        // Ensure consistent ordering to avoid duplicate keys
+        if (user1.getUserID().compareTo(user2.getUserID()) < 0) {
+            return user1.getUserID() + "-" + user2.getUserID();
+        } else {
+            return user2.getUserID() + "-" + user1.getUserID();
+        }
     }
 
     /**
