@@ -9,6 +9,7 @@ import java.security.KeyPairGenerator;
 import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
 import java.security.PublicKey;
+import java.util.List;
 import java.util.Scanner;
 
 /**
@@ -61,11 +62,12 @@ public class SecureP2PMessagingApp {
             System.out.println("\n--- P2P Messaging App Menu ---");
             System.out.println("1. Send a message");
             System.out.println("2. Add a contact");
-            System.out.println("3. View your contacts");
-            System.out.println("4. Disconnect from the network");
-            System.out.println("5. Exit");
+            System.out.println("3. See your conversations");
+            System.out.println("4. View your contacts");
+            System.out.println("5. Disconnect from the network");
+            System.out.println("6. Exit");
 
-            System.out.print("Choose an option: ");
+            System.out.print("Choose an option:\n");
 
             String option = bufferedReader.readLine();
             switch (option) {
@@ -118,17 +120,73 @@ public class SecureP2PMessagingApp {
                     break;
 
                 case "3":
-                    // Show contacts
-                    currentUser.showContacts();
+                    // Show conversation with all users.
+                    List<Conversation> conversations = userNetwork.getAllConversations(currentUser);
+
+                    if (conversations.isEmpty()) {
+                        System.out.println("No conversations found.");
+                        break;
+                    }
+
+                    for (int i = 0; i < conversations.size(); i++) {
+                        Conversation convo = conversations.get(i);
+                        User participant = convo.getParticipant1().equals(currentUser) ? convo.getParticipant2() : convo.getParticipant1();
+                        System.out.println((i + 1) + ". Conversation with " + participant.getUserName() + " (Started on " + convo.getStartTime() + ")");
+                    }
+
+                    System.out.print("Select a conversation by number: ");
+                    String selection = bufferedReader.readLine();
+                    int convoIndex;
+            
+                    try {
+                        convoIndex = Integer.parseInt(selection) - 1;
+                        if (convoIndex < 0 || convoIndex >= conversations.size()) {
+                            System.out.println("Invalid selection.");
+                            break;
+                        }
+                    } catch (NumberFormatException e) {
+                        System.out.println("Invalid input.");
+                        break;
+                    }
+                    
+                    Conversation selectedConvo = conversations.get(convoIndex);
+                    User otherParticipant = selectedConvo.getParticipant1().equals(currentUser) ? selectedConvo.getParticipant2() : selectedConvo.getParticipant1();
+
+                    System.out.println("\n--- Conversation with " + otherParticipant.getUserName() + " ---");
+                    for (Message msg : selectedConvo.getMessages()) {
+                        String senderName = msg.getSender().equals(currentUser) ? "You" : otherParticipant.getUserName();
+                        System.out.println(senderName + " [" + msg.getTimestamp() + "]: " + msg.getContent());
+                    }
+            
+                    System.out.print("\nEnter your message (or type 'cancel' to go back): ");
+                    String messageContent = bufferedReader.readLine();
+                    if (messageContent.equalsIgnoreCase("cancel")) {
+                        break;
+                    }
+
+                    // Create and send the message
+                    Message newMessage = new Message("1", currentUser, otherParticipant, messageContent);
+                    boolean success = userNetwork.sendDirectMessage(newMessage, currentUser, otherParticipant, otherParticipant.getPort());
+
+                    if (success) {
+                        System.out.println("Message sent to " + otherParticipant.getUserName());
+                    } else {
+                        System.out.println("Failed to send message to " + otherParticipant.getUserName());
+                    }
                     break;
 
                 case "4":
+                    // Show your contacts.
+                    currentUser.showContacts();
+                    break;
+
+                case "5":
                     userNetwork.disconnectPeer(currentUser);
                     System.out.println("You have been disconnected.");
                     running = false;
                     break;
 
-                case "5":
+                case "6":
                     System.out.println("Exiting...");
                     running = false;
                     scanner.close();

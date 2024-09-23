@@ -100,6 +100,7 @@ public class P2PNetwork {
                 // Create a new conversation if one does not exist
                 conversation = new Conversation(sender, receiver);
                 conversations.put(conversationKey, conversation);
+                System.out.println("New conversation created between " + sender.getUserName() + " and " + receiver.getUserName());
             }
 
             // Add the message to the conversation
@@ -129,6 +130,33 @@ public class P2PNetwork {
         } else {
             return user2.getUserID() + "-" + user1.getUserID();
         }
+    }
+
+    /**
+     * Retrieves the conversation between two users if it exists.
+     * 
+     * @param user1 The first participant.
+     * @param user2 The second participant.
+     * @return The conversation if found, or null otherwise.
+     */
+    public Conversation getConversation(User user1, User user2) {
+        return conversations.get(getConversationKey(user1, user2));
+    }
+
+    /**
+     * Retrieves all conversations involving the specified user.
+     * 
+     * @param user The user whose conversations are to be retrieved.
+     * @return A list of conversations involving the user.
+     */
+    public List<Conversation> getAllConversations(User user) {
+        List<Conversation> userConversations = new ArrayList<>();
+        for (Conversation convo : conversations.values()) {
+            if (convo.getParticipant1().equals(user) || convo.getParticipant2().equals(user)) {
+                userConversations.add(convo);
+            }
+        }
+        return userConversations;
     }
 
     /**

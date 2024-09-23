@@ -4,6 +4,7 @@ import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * Represents a user in the decentralized P2P network.
@@ -13,7 +14,7 @@ import java.util.List;
 public class User {
     
     // Unique identifier for the user
-    private String userID;
+    private UUID userID;
 
     //Username
     private String username;
@@ -41,7 +42,7 @@ public class User {
      * @param ipAddress  The IP address of the user.
      */
     public User(String userName, PublicKey publicKey, PrivateKey privateKey, String ipAddress, int port) {
-        this.userID = null;
+        this.userID = UUID.randomUUID();
         this.username = userName;
         this.publicKey = publicKey;
         this.privateKey = privateKey;
@@ -108,7 +109,7 @@ public class User {
      * 
      * @return The userID of the user.
      */
-    public String getUserID() {
+    public UUID getUserID() {
         return userID;
     }
 

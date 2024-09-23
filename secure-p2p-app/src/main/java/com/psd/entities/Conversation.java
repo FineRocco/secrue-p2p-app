@@ -39,7 +39,7 @@ public class Conversation {
      * @param message The message to be added.
      */
     public void addMessage(Message message) {
-        //TODO
+        messages.add(message);
     }
 
     /**
@@ -48,8 +48,25 @@ public class Conversation {
      * @return A list of messages exchanged in this conversation.
      */
     public List<Message> getMessages() {
-        //TODO
-        return null;
+        return messages;
+    }
+
+    /**
+     * Returns the participant1 in the conversation.
+     * 
+     * @return An user from the conversation.
+     */
+    public User getParticipant1() {
+        return participant1;
+    }
+
+    /**
+     * Returns the participant2 in the conversation.
+     * 
+     * @return An user from the conversation.
+     */
+    public User getParticipant2() {
+        return participant2;
     }
 
     /**
