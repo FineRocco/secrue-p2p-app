@@ -20,14 +20,20 @@ import javafx.stage.Stage;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.security.KeyPair;
-import java.security.KeyPairGenerator;
 import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
+
+import java.io.FileInputStream;
+import java.io.InputStream;
+import java.security.Key;
+import java.security.KeyStore;
+import java.security.KeyStoreException;
+import java.security.UnrecoverableKeyException;
+import java.security.cert.CertificateException;
 
 /**
  * Main class for the Secure P2P Messaging Application.
@@ -46,18 +52,21 @@ public class SecureP2PMessagingApp extends Application{
     public static void main(String[] args) throws IOException {
 
         try {
-            // Generate a temporary key pair (RSA algorithm)
-            KeyPairGenerator keyPairGen = KeyPairGenerator.getInstance("RSA");
-            keyPairGen.initialize(2048); // You can set the key size (e.g., 2048 bits)
-            
-            // Generate the key pair
-            KeyPair keyPair = keyPairGen.generateKeyPair();
-            
-            // Extract the public and private keys
-            publicKey = keyPair.getPublic();
-            privateKey = keyPair.getPrivate();
-            
-        } catch (NoSuchAlgorithmException e) {
+            KeyStore ks = KeyStore.getInstance("JKS");
+            try (InputStream keyStoreStream = new FileInputStream("keystore.jks")) {
+                ks.load(keyStoreStream, "psd2024".toCharArray());
+            }
+        
+            // Load the private key from the keystore
+            Key key = ks.getKey("selfsigned", "psd2024".toCharArray()); 
+            if (key instanceof PrivateKey) {
+                privateKey = (PrivateKey) key;
+        
+                // Load the corresponding public key from the certificate
+                java.security.cert.Certificate cert = ks.getCertificate("selfsigned");
+                publicKey = cert.getPublicKey();
+            }
+        } catch (KeyStoreException | NoSuchAlgorithmException | UnrecoverableKeyException | CertificateException | IOException e) {
             e.printStackTrace();
         }
 
