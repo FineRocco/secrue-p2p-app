@@ -1,18 +1,50 @@
 package com.psd;
 
+import javax.net.ssl.*;
 import java.io.*;
-import java.net.*;
+import java.security.KeyManagementException;
+import java.security.KeyStore;
+import java.security.KeyStoreException;
+import java.security.NoSuchAlgorithmException;
+import java.security.UnrecoverableKeyException;
+import java.security.cert.CertificateException;
 
 public class P2PClient {
 
-    private Socket clientSocket;
-    private BufferedReader in;
+    private SSLSocket clientSocket;
     private PrintWriter out;
 
-    public P2PClient(String peerAddress, int peerPort) throws IOException {
-        // Connect to the server (peer) on the specified IP address and port
-        clientSocket = new Socket(peerAddress, peerPort);
-        in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
+    public P2PClient(String peerAddress, int peerPort) throws IOException, KeyManagementException, NoSuchAlgorithmException, CertificateException, KeyStoreException, UnrecoverableKeyException {
+        // Setup SSL context with the keystore and truststore
+        SSLContext sslContext = SSLContext.getInstance("TLS");
+        KeyManagerFactory kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
+        KeyStore ks = KeyStore.getInstance("JKS");
+
+        // Load the keystore (adjust the path to your keystore)
+        try (InputStream keyStoreStream = new FileInputStream("keystore.jks")) {
+            ks.load(keyStoreStream, "psd2024".toCharArray());
+        }
+
+        // Initialize KeyManagerFactory with the keystore
+        kmf.init(ks, "psd2024".toCharArray());
+
+        // Load the truststore
+        KeyStore trustStore = KeyStore.getInstance("JKS");
+        try (InputStream trustStoreStream = new FileInputStream("truststore.jks")) {
+            trustStore.load(trustStoreStream, "psd2024".toCharArray());
+        }
+
+        // Initialize TrustManagerFactory with the truststore
+        TrustManagerFactory tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+        tmf.init(trustStore);
+
+        // Initialize the SSLContext with both key managers and trust managers
+        sslContext.init(kmf.getKeyManagers(), tmf.getTrustManagers(), null);
+
+        // Create an SSLSocketFactory from the SSLContext
+        SSLSocketFactory ssf = sslContext.getSocketFactory();
+        clientSocket = (SSLSocket) ssf.createSocket(peerAddress, peerPort);
+
         out = new PrintWriter(clientSocket.getOutputStream(), true);
     }
 

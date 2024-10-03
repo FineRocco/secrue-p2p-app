@@ -3,20 +3,21 @@ package com.psd;
 import com.psd.entities.*;
 import javafx.scene.layout.BorderPane;
 import java.io.IOException;
+import java.security.KeyManagementException;
+import java.security.KeyStoreException;
+import java.security.NoSuchAlgorithmException;
+import java.security.UnrecoverableKeyException;
+import java.security.cert.CertificateException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Queue;
 
 /**
  * Represents the P2P network responsible for managing connections between peers (users) 
  * and facilitating communication in a decentralized manner.
  */
 public class P2PNetwork {
-
-    // A message queue for temporarily storing messages until they can be delivered
-    private Queue<Message> messageQueue;
 
     // Port
     private int port;
@@ -39,13 +40,9 @@ public class P2PNetwork {
     public void connectPeer(User user, BorderPane mainMenuLayout) {
         // Start the peer's server in a new thread using the network's port
         new Thread(() -> {
-            try {
-                // Pass the mainMenuLayout to the P2PServer so that it can update the UI
-                P2PServer server = new P2PServer(port, mainMenuLayout);
-                server.start();  // This will listen in the background
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+            // Pass the mainMenuLayout to the P2PServer so that it can update the UI
+            P2PServer server = new P2PServer(port, mainMenuLayout);
+            server.start();  // This will listen in the background
         }).start();
     }
 
@@ -58,6 +55,10 @@ public class P2PNetwork {
      * @param receiver The recipient of the message.
      * @param receiverPort The port the receiver is listening on.
      * @return True if the message was successfully sent, false otherwise.
+     * @throws KeyStoreException 
+     * @throws CertificateException 
+     * @throws NoSuchAlgorithmException 
+     * @throws KeyManagementException 
      */
     public boolean sendDirectMessage(Message message, User sender, User receiver, int receiverPort) {
         try {
@@ -79,7 +80,7 @@ public class P2PNetwork {
             P2PClient client = new P2PClient(receiver.getIpAddress(), receiverPort);
             client.sendMessage(message.getContent());
             return true;
-        } catch (IOException e) {
+        } catch (IOException | KeyManagementException | NoSuchAlgorithmException | CertificateException | KeyStoreException | UnrecoverableKeyException e) {
             e.printStackTrace();
         }
         return false;
