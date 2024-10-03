@@ -1,6 +1,10 @@
 package com.psd;
 
 import com.psd.entities.*;
+import javafx.application.Platform;
+import javafx.scene.control.Label;
+import javafx.scene.layout.StackPane;
+import javafx.scene.layout.BorderPane;
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -14,9 +18,11 @@ public class P2PServer {
     private int port;  // The port on which the server listens
     private ServerSocket serverSocket;
     private volatile boolean running = true;
+    private BorderPane mainMenuLayout;  // Reference to the main layout in the JavaFX UI
 
-    public P2PServer(int port) {
+    public P2PServer(int port, BorderPane mainMenuLayout) {
         this.port = port;
+        this.mainMenuLayout = mainMenuLayout;  // Initialize the layout reference
     }
 
     /**
@@ -29,7 +35,7 @@ public class P2PServer {
         while (running) {
             try {
                 Socket socket = serverSocket.accept();  // Accept incoming connection
-                new Thread(new ClientHandler(socket)).start();  // Handle each client in a new thread
+                new Thread(new ClientHandler(socket, mainMenuLayout)).start();  // Handle each client in a new thread
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -54,9 +60,11 @@ public class P2PServer {
      */
     private static class ClientHandler implements Runnable {
         private Socket socket;
+        private BorderPane mainMenuLayout;  // Reference to the main layout for UI updates
 
-        public ClientHandler(Socket socket) {
+        public ClientHandler(Socket socket, BorderPane mainMenuLayout) {
             this.socket = socket;
+            this.mainMenuLayout = mainMenuLayout;  // Store layout reference for UI update
         }
 
         @Override
@@ -65,10 +73,16 @@ public class P2PServer {
                 // Read the message sent by the peer
                 BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
                 String message = reader.readLine();
-                System.out.println("Received message: " + message);
 
-                // You can add more logic here to handle the received message,
-                // for example, storing it, responding to the peer, etc.
+                // Update the JavaFX UI on the JavaFX Application Thread
+                Platform.runLater(() -> {
+                    // Create a new label with the received message
+                    Label messageLabel = new Label("Received message: " + message);
+
+                    // Set this label to the center of the mainMenuLayout
+                    StackPane messagePane = new StackPane(messageLabel);
+                    mainMenuLayout.setCenter(messagePane);  // Update the center with the received message
+                });
 
                 socket.close();  // Close the connection after the message is received
             } catch (IOException e) {
@@ -77,4 +91,3 @@ public class P2PServer {
         }
     }
 }
- 

@@ -20,12 +20,4 @@ public class P2PClient {
         // Send message to the connected peer
         out.println(message);
     }
-
-    public void receiveMessages() throws IOException {
-        // Listen for messages from the peer
-        String receivedMessage;
-        while ((receivedMessage = in.readLine()) != null) {
-            System.out.println("\nReceived: " + receivedMessage);
-        }
-    }
 }

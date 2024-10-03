@@ -1,6 +1,7 @@
 package com.psd;
 
 import com.psd.entities.*;
+import javafx.scene.layout.BorderPane;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -17,7 +18,7 @@ public class P2PNetwork {
     // A message queue for temporarily storing messages until they can be delivered
     private Queue<Message> messageQueue;
 
-    //Port
+    // Port
     private int port;
 
     // Track conversations based on participants' unique combination
@@ -32,52 +33,20 @@ public class P2PNetwork {
      * Connects a peer (user) to the P2P network by starting a P2PServer thread.
      * 
      * @param user The user that wants to join the network.
+     * @param mainMenuLayout The layout where the received messages will be displayed.
      * @return True if the user is successfully connected, false otherwise.
      */
-    public void connectPeer(User user) {
-            // Start the peer's server in a new thread using the network's port
-            new Thread(() -> {
-                try {
-                    P2PServer server = new P2PServer(port);
-                    server.start();  // This will listen in the background
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            }).start();
-    }
-
-    /**
-     * Disconnects a peer (user) from the P2P network.
-     * 
-     * @param user The user that wants to leave the network.
-     * @return True if the user successfully disconnects, false otherwise.
-     */
-    public boolean disconnectPeer(User user) {
-        // TODO
-        return false;
-    }
-
-    /**
-     * Finds a peer (user) on the network by their unique identifier.
-     * 
-     * @param userID The unique identifier of the peer.
-     * @return The user found on the network, or null if the peer is not found.
-     */
-    public User findPeerByID(String userID) {
-        // TODO
-        return null;
-    }
-
-    /**
-     * Broadcasts a message to all connected peers on the network.
-     * 
-     * @param message The message to broadcast.
-     * @param sender The user sending the broadcast message.
-     * @return True if the message was successfully broadcast, false otherwise.
-     */
-    public boolean broadcastMessage(Message message, User sender) {
-        // TODO
-        return false;
+    public void connectPeer(User user, BorderPane mainMenuLayout) {
+        // Start the peer's server in a new thread using the network's port
+        new Thread(() -> {
+            try {
+                // Pass the mainMenuLayout to the P2PServer so that it can update the UI
+                P2PServer server = new P2PServer(port, mainMenuLayout);
+                server.start();  // This will listen in the background
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }).start();
     }
 
     /**
@@ -157,6 +126,40 @@ public class P2PNetwork {
             }
         }
         return userConversations;
+    }
+
+        /**
+     * Disconnects a peer (user) from the P2P network.
+     * 
+     * @param user The user that wants to leave the network.
+     * @return True if the user successfully disconnects, false otherwise.
+     */
+    public boolean disconnectPeer(User user) {
+        // TODO
+        return false;
+    }
+
+    /**
+     * Finds a peer (user) on the network by their unique identifier.
+     * 
+     * @param userID The unique identifier of the peer.
+     * @return The user found on the network, or null if the peer is not found.
+     */
+    public User findPeerByID(String userID) {
+        // TODO
+        return null;
+    }
+
+    /**
+     * Broadcasts a message to all connected peers on the network.
+     * 
+     * @param message The message to broadcast.
+     * @param sender The user sending the broadcast message.
+     * @return True if the message was successfully broadcast, false otherwise.
+     */
+    public boolean broadcastMessage(Message message, User sender) {
+        // TODO
+        return false;
     }
 
     /**
