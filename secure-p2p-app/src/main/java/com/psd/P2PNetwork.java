@@ -13,6 +13,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import java.io.ByteArrayOutputStream;
+import java.io.ObjectOutputStream;
+
 /**
  * Represents the P2P network responsible for managing connections between peers (users) 
  * and facilitating communication in a decentralized manner.
@@ -60,7 +63,7 @@ public class P2PNetwork {
      * @throws NoSuchAlgorithmException 
      * @throws KeyManagementException 
      */
-    public boolean sendDirectMessage(Message message, User sender, User receiver, int receiverPort) {
+    public boolean sendDirectMessage(Message message, User sender, User receiver) {
         try {
             // Check if conversation exists between sender and receiver
             String conversationKey = getConversationKey(sender, receiver);
@@ -76,14 +79,29 @@ public class P2PNetwork {
             // Add the message to the conversation
             conversation.addMessage(message);
 
+            // Serialize the message
+            byte[] serializedMessage = serializeMessage(message);
+
             // Send the message using the P2P client
-            P2PClient client = new P2PClient(receiver.getIpAddress(), receiverPort);
-            client.sendMessage(message.getContent());
+            P2PClient client = new P2PClient(receiver.getIpAddress(), receiver.getPort());
+            
+            // Send the actual serialized message
+            client.sendMessage(serializedMessage);
+
             return true;
+
         } catch (IOException | KeyManagementException | NoSuchAlgorithmException | CertificateException | KeyStoreException | UnrecoverableKeyException e) {
             e.printStackTrace();
         }
         return false;
+    }
+
+    private byte[] serializeMessage(Message message) throws IOException {
+        try (ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
+             ObjectOutputStream out = new ObjectOutputStream(byteOut)) {
+            out.writeObject(message);
+            return byteOut.toByteArray();
+        }
     }
 
     /**

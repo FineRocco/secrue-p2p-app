@@ -12,7 +12,7 @@ import java.security.cert.CertificateException;
 public class P2PClient {
 
     private SSLSocket clientSocket;
-    private PrintWriter out;
+    private DataOutputStream dataOut;
 
     public P2PClient(String peerAddress, int peerPort) throws IOException, KeyManagementException, NoSuchAlgorithmException, CertificateException, KeyStoreException, UnrecoverableKeyException {
         // Setup SSL context with the keystore and truststore
@@ -45,11 +45,21 @@ public class P2PClient {
         SSLSocketFactory ssf = sslContext.getSocketFactory();
         clientSocket = (SSLSocket) ssf.createSocket(peerAddress, peerPort);
 
-        out = new PrintWriter(clientSocket.getOutputStream(), true);
+        // Initialize DataOutputStream with the socket's output stream
+        dataOut = new DataOutputStream(clientSocket.getOutputStream());
     }
 
-    public void sendMessage(String message) {
-        // Send message to the connected peer
-        out.println(message);
+    public void sendMessage(byte[] message) throws IOException {
+        // Send the length of the message first
+        dataOut.writeInt(message.length);
+
+        // Send the serialized message to the connected peer
+        dataOut.write(message);
+        dataOut.flush();
+    }
+
+    public void close() throws IOException {
+        dataOut.close();
+        clientSocket.close();
     }
 }

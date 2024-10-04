@@ -201,7 +201,7 @@ public class SecureP2PMessagingApp extends Application{
                 if (receiverName != null && !messageContent.isEmpty()) {
                     // Create and send the message
                     Message message = new Message("1", currentUser, receiver, messageContent);
-                    boolean success = userNetwork.sendDirectMessage(message, currentUser, receiver, receiver.getPort());
+                    boolean success = userNetwork.sendDirectMessage(message, currentUser, receiver);
 
                     // Confirmation message
                     Label confirmationLabel;
@@ -265,7 +265,7 @@ public class SecureP2PMessagingApp extends Application{
                     if (receiver != null) {
                         // Create and send the message
                         Message message = new Message("1", currentUser, receiver, messageContent);
-                        boolean success = userNetwork.sendDirectMessage(message, currentUser, receiver, receiver.getPort());
+                        boolean success = userNetwork.sendDirectMessage(message, currentUser, receiver);
 
                         // Confirmation message
                         Label confirmationLabel;
@@ -363,7 +363,7 @@ public class SecureP2PMessagingApp extends Application{
                             if (!messageContent.isEmpty()) {
                                 // Create and send the message
                                 Message newMessage = new Message("1", currentUser, otherParticipant, messageContent);
-                                boolean success = userNetwork.sendDirectMessage(newMessage, currentUser, otherParticipant, otherParticipant.getPort());
+                                boolean success = userNetwork.sendDirectMessage(newMessage, currentUser, otherParticipant);
         
                                 Label statusLabel;
                                 if (success) {

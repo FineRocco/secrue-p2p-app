@@ -6,6 +6,9 @@ import javafx.scene.layout.StackPane;
 import javafx.scene.layout.BorderPane;
 
 import javax.net.ssl.*;
+
+import com.psd.entities.Message;
+
 import java.io.*;
 import java.security.KeyManagementException;
 import java.security.KeyStore;
@@ -96,6 +99,13 @@ public class P2PServer {
         }
     }
 
+    private static Message deserializeMessage(byte[] data) throws IOException, ClassNotFoundException {
+        try (ByteArrayInputStream byteIn = new ByteArrayInputStream(data);
+            ObjectInputStream in = new ObjectInputStream(byteIn)) {
+            return (Message) in.readObject();
+        }
+    }
+
     /**
      * Handles the communication with an individual client (peer) in a separate thread.
      */
@@ -112,23 +122,40 @@ public class P2PServer {
         public void run() {
             try {
                 // Read the message sent by the peer
-                BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-                String message = reader.readLine();
-
+                DataInputStream dataIn = new DataInputStream(socket.getInputStream());
+        
+                // Read the length of the incoming message
+                int messageLength = dataIn.readInt();
+        
+                // Initialize a byte array to hold the exact message size
+                byte[] messageBytes = new byte[messageLength];
+        
+                // Read the message into the byte array
+                int totalBytesRead = 0;
+                while (totalBytesRead < messageLength) {
+                    int bytesRead = dataIn.read(messageBytes, totalBytesRead, messageLength - totalBytesRead);
+                    if (bytesRead == -1) break; // End of stream
+                    totalBytesRead += bytesRead;
+                }
+        
+                // Deserialize the message
+                Message message = deserializeMessage(messageBytes);
+        
                 // Update the JavaFX UI on the JavaFX Application Thread
                 Platform.runLater(() -> {
                     // Create a new label with the received message
-                    Label messageLabel = new Label("Received message: " + message);
-
+                    Label messageLabel = new Label("Received message: " + message.getContent());
+        
                     // Set this label to the center of the mainMenuLayout
                     StackPane messagePane = new StackPane(messageLabel);
                     mainMenuLayout.setCenter(messagePane);  // Update the center with the received message
                 });
-
+        
                 socket.close();  // Close the connection after the message is received
-            } catch (IOException e) {
+            } catch (IOException | ClassNotFoundException e) {
                 e.printStackTrace();
             }
         }
+        
     }
 }

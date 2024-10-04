@@ -3,12 +3,13 @@ package com.psd.entities;
 import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.time.LocalDateTime;
+import java.io.Serializable;
 
 /**
  * Represents a message being exchanged between users in the P2P network.
  * Each message contains encrypted content, a signature, and metadata like the sender and recipient.
  */
-public class Message {
+public class Message implements Serializable{
 
     // Unique identifier for the message
     private String messageID;

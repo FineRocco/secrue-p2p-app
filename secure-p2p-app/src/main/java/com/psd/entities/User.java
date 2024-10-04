@@ -5,13 +5,14 @@ import java.security.PublicKey;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.io.Serializable;
 
 /**
  * Represents a user in the decentralized P2P network.
  * Each user has their own private and public key pair for encryption, and can communicate
  * with other users in the network.
  */
-public class User {
+public class User implements Serializable{
     
     // Unique identifier for the user
     private UUID userID;
