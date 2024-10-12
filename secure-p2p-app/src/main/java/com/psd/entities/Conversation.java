@@ -75,8 +75,10 @@ public class Conversation {
      * @return A list containing the two participants in the conversation.
      */
     public List<User> getParticipants() {
-        //TODO
-        return null;
+        List<User> pList = new ArrayList<>();
+        pList.add(participant1);
+        pList.add(participant2);
+        return pList;
     }
 
     /**
