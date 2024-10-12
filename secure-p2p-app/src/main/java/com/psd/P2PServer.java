@@ -242,7 +242,7 @@ public class P2PServer {
                 Platform.runLater(() -> {
                     // Create a new label with the received message
                     Label messageLabel = new Label("Received message: " + message.getContent());
-        
+    
                     // Set this label to the center of the mainMenuLayout
                     StackPane messagePane = new StackPane(messageLabel);
                     mainMenuLayout.setCenter(messagePane);  // Update the center with the received message

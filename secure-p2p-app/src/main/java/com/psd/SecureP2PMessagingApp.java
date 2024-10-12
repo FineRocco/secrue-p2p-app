@@ -8,6 +8,7 @@ import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
+import javafx.scene.control.ScrollPane;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.BorderPane;
@@ -34,6 +35,7 @@ import java.security.KeyStore;
 import java.security.KeyStoreException;
 import java.security.UnrecoverableKeyException;
 import java.security.cert.CertificateException;
+import java.time.format.DateTimeFormatter;
 
 /**
  * Main class for the Secure P2P Messaging Application.
@@ -300,14 +302,15 @@ public class SecureP2PMessagingApp extends Application{
             });
         });
 
+        // Handle conversationsButton click
         conversationsButton.setOnAction(event -> {
             // Retrieve all conversations for the current user
             List<Conversation> conversations = userServer.getAllConversations(currentUser);
-        
+
             // Create a layout to display the conversations
             VBox conversationsLayout = new VBox(10);
             conversationsLayout.setAlignment(Pos.CENTER);
-        
+
             if (conversations.isEmpty()) {
                 // Display message if no conversations found
                 Label noConversationsLabel = new Label("No conversations found.");
@@ -316,11 +319,11 @@ public class SecureP2PMessagingApp extends Application{
                 // Label for selecting a conversation
                 Label selectConversationLabel = new Label("Select a conversation:");
                 conversationsLayout.getChildren().add(selectConversationLabel);
-        
+
                 // List of conversations
                 ComboBox<String> conversationComboBox = new ComboBox<>();
                 Map<String, Conversation> conversationMap = new HashMap<>();
-        
+
                 for (int i = 0; i < conversations.size(); i++) {
                     Conversation convo = conversations.get(i);
                     User participant = convo.getParticipant1().equals(currentUser) ? convo.getParticipant2() : convo.getParticipant1();
@@ -328,79 +331,102 @@ public class SecureP2PMessagingApp extends Application{
                     conversationComboBox.getItems().add(convoLabel);
                     conversationMap.put(convoLabel, convo);
                 }
-        
+
                 Button viewConversationButton = new Button("View Conversation");
-        
+
                 // Add elements to layout
                 conversationsLayout.getChildren().addAll(conversationComboBox, viewConversationButton);
-        
+
                 // Handle view conversation button click
                 viewConversationButton.setOnAction(viewEvent -> {
                     String selectedConvoLabel = conversationComboBox.getValue();
                     if (selectedConvoLabel != null) {
                         Conversation selectedConvo = conversationMap.get(selectedConvoLabel);
                         User otherParticipant = selectedConvo.getParticipant1().equals(currentUser) ? selectedConvo.getParticipant2() : selectedConvo.getParticipant1();
-        
-                        // Create a layout to display the conversation
-                        VBox conversationDetailsLayout = new VBox(10);
-                        conversationDetailsLayout.setAlignment(Pos.CENTER);
-        
+
+                        // Create a vertical layout to hold the conversation details and input area
+                        VBox conversationLayout = new VBox(10);
+                        conversationLayout.setAlignment(Pos.CENTER);
+
+                        // Top horizontal box for chat logs
+                        HBox chatLogsBox = new HBox(10);
+                        chatLogsBox.setAlignment(Pos.CENTER);
+
+                        // Label for conversation header
                         Label conversationHeader = new Label("--- Conversation with " + otherParticipant.getUserName() + " ---");
-                        conversationDetailsLayout.getChildren().add(conversationHeader);
-        
-                        // Display messages in the conversation
+
+                        // VBox to hold the messages, wrapped in a ScrollPane
+                        VBox chatLogs = new VBox(10);
                         for (Message msg : selectedConvo.getMessages()) {
+                            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+                            String formattedTimestamp = msg.getTimestamp().format(formatter);
                             String senderName = msg.getSender().equals(currentUser) ? "You" : otherParticipant.getUserName();
-                            Label messageLabel = new Label(senderName + " [" + msg.getTimestamp() + "]: " + msg.getContent());
-                            conversationDetailsLayout.getChildren().add(messageLabel);
+                            Label messageLabel = new Label(senderName + " [" + formattedTimestamp + "]: " + msg.getContent());
+                            chatLogs.getChildren().add(messageLabel);
                         }
-        
-                        // Input for new message
+
+                        // Wrap the chatLogs VBox in a ScrollPane
+                        ScrollPane scrollPane = new ScrollPane(chatLogs);
+                        scrollPane.setFitToWidth(true);
+                        scrollPane.setPrefHeight(400); // Adjust the height as needed to fit the layout
+
+                        chatLogsBox.getChildren().add(scrollPane);
+
+                        // Bottom horizontal box for text input and send button
+                        HBox inputBox = new HBox(10);
+                        inputBox.setAlignment(Pos.CENTER_LEFT);
+
+                        // Text area for new message input
                         TextArea newMessageInput = new TextArea();
                         newMessageInput.setWrapText(true);
+                        newMessageInput.setPrefHeight(50); // Set a fixed height for the text area
+
+                        // Send message button
                         Button sendMessageButton = new Button("Send Message");
-        
-                        conversationDetailsLayout.getChildren().addAll(newMessageInput, sendMessageButton);
-        
+
+                        inputBox.getChildren().addAll(newMessageInput, sendMessageButton);
+
+                        // Add the top chat logs and bottom input box to the vertical layout
+                        conversationLayout.getChildren().addAll(conversationHeader, chatLogsBox, inputBox);
+
                         // Set action for send message button
                         sendMessageButton.setOnAction(sendEvent -> {
                             String messageContent = newMessageInput.getText();
-        
+
                             if (!messageContent.isEmpty()) {
                                 // Create and send the message
                                 Message newMessage = new Message("1", currentUser, otherParticipant, messageContent);
                                 boolean success = userServer.sendDirectMessage(newMessage, currentUser, otherParticipant);
-        
-                                Label statusLabel;
-                                if (success) {
-                                    statusLabel = new Label("Message sent to " + otherParticipant.getUserName());
-                                    newMessageInput.clear();
-        
-                                    // Update conversation with the new message
-                                    selectedConvo.addMessage(newMessage);
-                                    String senderName = "You";
-                                    Label messageLabel = new Label(senderName + " [" + newMessage.getTimestamp() + "]: " + newMessage.getContent());
-                                    conversationDetailsLayout.getChildren().add(conversationDetailsLayout.getChildren().size() - 2, messageLabel);
-                                } else {
-                                    statusLabel = new Label("Failed to send message to " + otherParticipant.getUserName());
+
+                                newMessageInput.clear();
+                    
+                                // Dynamically add the new message to the chat log
+                                String senderName = "You";
+                                DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+                                String formattedTimestamp = newMessage.getTimestamp().format(formatter);
+                                Label messageLabel = new Label(senderName + " [" + formattedTimestamp + "]: " + newMessage.getContent());
+                                chatLogs.getChildren().add(messageLabel); // Update the chat log with the new message
+                    
+                                // Optionally, scroll to the bottom of the chat log
+                                scrollPane.setVvalue(1.0); // This ensures the scroll pane moves to the latest message
+                                if (!success) {
+                                    Label statusLabel = new Label("Failed to send message to " + otherParticipant.getUserName());
+                                    conversationLayout.getChildren().add(statusLabel);
                                 }
-        
-                                conversationDetailsLayout.getChildren().add(statusLabel);
                             }
                         });
-        
-                        // Set the new layout to the center pane of the BorderPane
-                        mainMenuLayout.setCenter(conversationDetailsLayout) ;
+
+                        // Set the conversation layout as the center pane of the main layout
+                        mainMenuLayout.setCenter(conversationLayout);
                     } else {
                         conversationComboBox.setPromptText("Select a conversation");
                     }
                 });
             }
-        
-            // Set the conversations layout to the center pane
+
+            // Set the conversations layout to the center of the main layout
             mainMenuLayout.setCenter(conversationsLayout);
         });
-        
 
         addContactButton.setOnAction(event -> {
             // Create the input fields and labels for adding a contact
