@@ -47,7 +47,9 @@ public class SecureP2PMessagingApp extends Application{
     static PrivateKey privateKey = null;
 
     User currentUser;
-    P2PNetwork userNetwork;
+
+    //P2PNetwork userNetwork;
+    P2PServer userServer;
 
     public static void main(String[] args) throws IOException {
 
@@ -124,9 +126,13 @@ public class SecureP2PMessagingApp extends Application{
 
                 // Initialize the P2P network for the user
                 // Assuming P2PNetwork and User classes exist with the required constructors
-                userNetwork = new P2PNetwork();
-                currentUser = new User(userName, publicKey, privateKey, "127.0.0.1", userPort);
+                /*userNetwork = new P2PNetwork(userPort);
+
                 userNetwork.connectPeer(currentUser, mainMenuLayout);
+                */
+                currentUser = new User(userName, publicKey, privateKey, "127.0.0.1", userPort);
+                userServer = new P2PServer(userPort, mainMenuLayout);
+
 
                 // Create a top bar with user details
                 HBox topBar = new HBox();
@@ -201,7 +207,7 @@ public class SecureP2PMessagingApp extends Application{
                 if (receiverName != null && !messageContent.isEmpty()) {
                     // Create and send the message
                     Message message = new Message("1", currentUser, receiver, messageContent);
-                    boolean success = userNetwork.sendDirectMessage(message, currentUser, receiver);
+                    boolean success = userServer.sendDirectMessage(message, currentUser, receiver);
 
                     // Confirmation message
                     Label confirmationLabel;
@@ -265,7 +271,7 @@ public class SecureP2PMessagingApp extends Application{
                     if (receiver != null) {
                         // Create and send the message
                         Message message = new Message("1", currentUser, receiver, messageContent);
-                        boolean success = userNetwork.sendDirectMessage(message, currentUser, receiver);
+                        boolean success = userServer.sendDirectMessage(message, currentUser, receiver);
 
                         // Confirmation message
                         Label confirmationLabel;
@@ -296,7 +302,7 @@ public class SecureP2PMessagingApp extends Application{
 
         conversationsButton.setOnAction(event -> {
             // Retrieve all conversations for the current user
-            List<Conversation> conversations = userNetwork.getAllConversations(currentUser);
+            List<Conversation> conversations = userServer.getAllConversations(currentUser);
         
             // Create a layout to display the conversations
             VBox conversationsLayout = new VBox(10);
@@ -363,7 +369,7 @@ public class SecureP2PMessagingApp extends Application{
                             if (!messageContent.isEmpty()) {
                                 // Create and send the message
                                 Message newMessage = new Message("1", currentUser, otherParticipant, messageContent);
-                                boolean success = userNetwork.sendDirectMessage(newMessage, currentUser, otherParticipant);
+                                boolean success = userServer.sendDirectMessage(newMessage, currentUser, otherParticipant);
         
                                 Label statusLabel;
                                 if (success) {

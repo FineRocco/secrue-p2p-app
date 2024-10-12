@@ -1,5 +1,7 @@
 package com.psd;
 
+import com.psd.entities.Conversation;
+import com.psd.entities.User;
 import javafx.application.Platform;
 import javafx.scene.control.Label;
 import javafx.scene.layout.StackPane;
@@ -16,6 +18,10 @@ import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
 import java.security.UnrecoverableKeyException;
 import java.security.cert.CertificateException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Represents a P2P server that listens for incoming messages from peers.
@@ -27,10 +33,15 @@ public class P2PServer {
     private SSLServerSocket serverSocket;
     private volatile boolean running = true;
     private BorderPane mainMenuLayout;  // Reference to the main layout in the JavaFX UI
+    private static Map<String, Conversation> conversations;
 
     public P2PServer(int port, BorderPane mainMenuLayout) {
         this.port = port;
         this.mainMenuLayout = mainMenuLayout;  // Initialize the layout reference
+        this.conversations = new HashMap<>();
+        new Thread(() -> {
+            start();  // This will listen in the background
+        }).start();
     }
 
     /**
@@ -105,6 +116,78 @@ public class P2PServer {
             return (Message) in.readObject();
         }
     }
+    public boolean sendDirectMessage(Message message, User sender, User receiver) {
+        try {
+            // Check if conversation exists between sender and receiver
+            String conversationKey = getConversationKey(sender, receiver);
+            Conversation conversation = conversations.get(conversationKey);
+
+            if (conversation == null) {
+                // Create a new conversation if one does not exist
+                conversation = new Conversation(sender, receiver);
+                conversations.put(conversationKey, conversation);
+                System.out.println("New conversation created between " + sender.getUserName() + " and " + receiver.getUserName());
+            }
+
+            // Add the message to the conversation
+            conversation.addMessage(message);
+
+            // Serialize the message
+            byte[] serializedMessage = serializeMessage(message);
+
+            // Send the message using the P2P client
+            P2PClient client = new P2PClient(receiver.getIpAddress(), receiver.getPort());
+
+            // Send the actual serialized message
+            client.sendMessage(serializedMessage);
+
+            return true;
+
+        } catch (IOException | KeyManagementException | NoSuchAlgorithmException | CertificateException | KeyStoreException | UnrecoverableKeyException e) {
+            e.printStackTrace();
+        }
+        return false;
+    }
+
+    private byte[] serializeMessage(Message message) throws IOException {
+        try (ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
+             ObjectOutputStream out = new ObjectOutputStream(byteOut)) {
+            out.writeObject(message);
+            return byteOut.toByteArray();
+        }
+    }
+
+    /**
+     * Creates a unique key for each conversation between two users.
+     *
+     * @param user1 The first participant
+     * @param user2 The second participant
+     * @return A string key representing the unique conversation
+     */
+    private String getConversationKey(User user1, User user2) {
+        // Ensure consistent ordering to avoid duplicate keys
+        if (user1.getUserID().compareTo(user2.getUserID()) < 0) {
+            return user1.getUserID() + "-" + user2.getUserID();
+        } else {
+            return user2.getUserID() + "-" + user1.getUserID();
+        }
+    }
+
+    /**
+     * Retrieves all conversations involving the specified user.
+     *
+     * @param user The user whose conversations are to be retrieved.
+     * @return A list of conversations involving the user.
+     */
+    public List<Conversation> getAllConversations(User user) {
+        List<Conversation> userConversations = new ArrayList<>();
+        for (Conversation convo : conversations.values()) {
+            if (convo.getParticipant1().equals(user) || convo.getParticipant2().equals(user)) {
+                userConversations.add(convo);
+            }
+        }
+        return userConversations;
+    }
 
     /**
      * Handles the communication with an individual client (peer) in a separate thread.
@@ -156,6 +239,6 @@ public class P2PServer {
                 e.printStackTrace();
             }
         }
-        
+
     }
 }
