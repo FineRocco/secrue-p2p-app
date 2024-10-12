@@ -164,7 +164,7 @@ public class P2PServer {
      * @param user2 The second participant
      * @return A string key representing the unique conversation
      */
-    private String getConversationKey(User user1, User user2) {
+    private static String getConversationKey(User user1, User user2) {
         // Ensure consistent ordering to avoid duplicate keys
         if (user1.getUserID().compareTo(user2.getUserID()) < 0) {
             return user1.getUserID() + "-" + user2.getUserID();
@@ -182,7 +182,8 @@ public class P2PServer {
     public List<Conversation> getAllConversations(User user) {
         List<Conversation> userConversations = new ArrayList<>();
         for (Conversation convo : conversations.values()) {
-            if (convo.getParticipant1().equals(user) || convo.getParticipant2().equals(user)) {
+            if (convo.getParticipant1().getUserID().equals(user.getUserID()) ||
+                    convo.getParticipant2().getUserID().equals(user.getUserID())) {
                 userConversations.add(convo);
             }
         }
@@ -223,7 +224,20 @@ public class P2PServer {
         
                 // Deserialize the message
                 Message message = deserializeMessage(messageBytes);
-        
+
+                // Check if conversation exists between sender and receiver
+                String conversationKey = getConversationKey(message.getSender(), message.getReceiver());
+                Conversation conversation = conversations.get(conversationKey);
+
+                if (conversation == null) {
+                    // Create a new conversation if one does not exist
+                    conversation = new Conversation(message.getSender(), message.getReceiver());
+                    conversations.put(conversationKey, conversation);
+                    System.out.println("New conversation created between " + message.getSender().getUserName() + " and " + message.getReceiver().getUserName());
+                }
+
+                // Add the message to the conversation
+                conversation.addMessage(message);
                 // Update the JavaFX UI on the JavaFX Application Thread
                 Platform.runLater(() -> {
                     // Create a new label with the received message
@@ -235,6 +249,7 @@ public class P2PServer {
                 });
         
                 socket.close();  // Close the connection after the message is received
+
             } catch (IOException | ClassNotFoundException e) {
                 e.printStackTrace();
             }

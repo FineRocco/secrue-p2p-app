@@ -15,7 +15,7 @@ import java.io.Serializable;
 public class User implements Serializable{
     
     // Unique identifier for the user
-    private UUID userID;
+    private String userID;
 
     //Username
     private String username;
@@ -43,7 +43,7 @@ public class User implements Serializable{
      * @param ipAddress  The IP address of the user.
      */
     public User(String userName, PublicKey publicKey, PrivateKey privateKey, String ipAddress, int port) {
-        this.userID = UUID.randomUUID();
+        this.userID = userName + publicKey.toString();
         this.username = userName;
         this.publicKey = publicKey;
         this.privateKey = privateKey;
@@ -110,7 +110,7 @@ public class User implements Serializable{
      * 
      * @return The userID of the user.
      */
-    public UUID getUserID() {
+    public String getUserID() {
         return userID;
     }
 
