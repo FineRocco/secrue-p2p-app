@@ -390,7 +390,7 @@ public class SecureP2PMessagingApp extends Application{
                         });
         
                         // Set the new layout to the center pane of the BorderPane
-                        mainMenuLayout.setCenter(conversationDetailsLayout);
+                        mainMenuLayout.setCenter(conversationDetailsLayout) ;
                     } else {
                         conversationComboBox.setPromptText("Select a conversation");
                     }
