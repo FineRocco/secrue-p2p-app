@@ -124,7 +124,7 @@ public class SecureP2PMessagingApp extends Application{
 
                 // Initialize the P2P network for the user
                 // Assuming P2PNetwork and User classes exist with the required constructors
-                userNetwork = new P2PNetwork(userPort);
+                userNetwork = new P2PNetwork();
                 currentUser = new User(userName, publicKey, privateKey, "127.0.0.1", userPort);
                 userNetwork.connectPeer(currentUser, mainMenuLayout);
 

@@ -55,7 +55,7 @@ public class Message implements Serializable{
      * @param publicKey  The public key of the recipient.
      * @return The encrypted content as a string.
      */
-    public String encryptMessage(String content, PublicKey publicKey) {
+    public String encryptMessage(PublicKey publicKey) {
         //TODO
         return null;
     }
@@ -67,7 +67,7 @@ public class Message implements Serializable{
      * @param privateKey       The private key of the recipient.
      * @return The decrypted plain-text content of the message.
      */
-    public String decryptMessage(String encryptedContent, PrivateKey privateKey) {
+    public String decryptMessage(PrivateKey privateKey) {
         //TODO
         return null;
     }

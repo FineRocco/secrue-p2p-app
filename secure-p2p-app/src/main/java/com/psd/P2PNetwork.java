@@ -22,14 +22,10 @@ import java.io.ObjectOutputStream;
  */
 public class P2PNetwork {
 
-    // Port
-    private int port;
-
     // Track conversations based on participants' unique combination
     private Map<String, Conversation> conversations;
 
-    public P2PNetwork(int port) {
-        this.port = port;
+    public P2PNetwork() {
         this.conversations = new HashMap<>();
     }
 
@@ -44,7 +40,7 @@ public class P2PNetwork {
         // Start the peer's server in a new thread using the network's port
         new Thread(() -> {
             // Pass the mainMenuLayout to the P2PServer so that it can update the UI
-            P2PServer server = new P2PServer(port, mainMenuLayout);
+            P2PServer server = new P2PServer(user.getPort(), mainMenuLayout);
             server.start();  // This will listen in the background
         }).start();
     }
@@ -111,7 +107,7 @@ public class P2PNetwork {
      * @param user2 The second participant
      * @return A string key representing the unique conversation
      */
-    private String getConversationKey(User user1, User user2) {
+    public String getConversationKey(User user1, User user2) {
         // Ensure consistent ordering to avoid duplicate keys
         if (user1.getUserID().compareTo(user2.getUserID()) < 0) {
             return user1.getUserID() + "-" + user2.getUserID();
@@ -145,6 +141,10 @@ public class P2PNetwork {
             }
         }
         return userConversations;
+    }
+
+    public Map<String, Conversation> getConversations(){
+        return conversations;
     }
 
         /**
