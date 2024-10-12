@@ -377,7 +377,6 @@ public class SecureP2PMessagingApp extends Application{
                                     newMessageInput.clear();
         
                                     // Update conversation with the new message
-                                    selectedConvo.addMessage(newMessage);
                                     String senderName = "You";
                                     Label messageLabel = new Label(senderName + " [" + newMessage.getTimestamp() + "]: " + newMessage.getContent());
                                     conversationDetailsLayout.getChildren().add(conversationDetailsLayout.getChildren().size() - 2, messageLabel);
