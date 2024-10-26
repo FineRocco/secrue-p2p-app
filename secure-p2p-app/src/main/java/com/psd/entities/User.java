@@ -13,11 +13,8 @@ import java.io.Serializable;
  * with other users in the network.
  */
 public class User implements Serializable{
-    
-    // Unique identifier for the user
-    private String userID;
 
-    //Username
+    private String userID; // Unique identifier for the user
     private String username;
 
     // Public and private key pair used for encryption and signing
@@ -27,12 +24,6 @@ public class User implements Serializable{
     // IP address and Port of the user in the P2P network
     private String ipAddress;
     private int port;
-
-    // List of contacts (other users) the user communicates with
-    private List<User> contacts;
-
-    // List of conversations this user is involved in
-    private List<Conversation> conversations;
 
     /**
      * Constructs a new User with the specified ID, keys, and IP address.
@@ -49,61 +40,7 @@ public class User implements Serializable{
         this.privateKey = privateKey;
         this.ipAddress = ipAddress;
         this.port = port;
-        this.contacts = new ArrayList<>();
-        this.conversations = new ArrayList<>();
     }
-
-    /**
-     * Sends a message to another user.
-     * The message will be encrypted using the receiver's public key.
-     * 
-     * @param recipient The recipient user to send the message to.
-     * @param message   The message to send.
-     */
-    public void sendMessage(User recipient, Message message) {
-        //TODO
-    }
-
-    /**
-     * Receives a message from another user.
-     * The message will be decrypted using this user's private key.
-     * 
-     * @param message The encrypted message received.
-     */
-    public void receiveMessage(Message message) {
-        //TODO
-    }
-
-    /**
-     * Starts a new conversation with another user.
-     * 
-     * @param otherUser The user to start the conversation with.
-     * @return A new conversation object.
-     */
-    public Conversation startConversation(User otherUser) {
-        //TODO
-        return null;
-    }
-
-    /**
-     * Adds a new contact (user) to the contact list.
-     * 
-     * @param contact The new contact to be added.
-     */
-    public void addContact(User contact) {
-        contacts.add(contact);
-    }
-
-    public User findContactByUsername(String username) {
-        for (User contact : contacts) {
-            if (contact.getUserName().equalsIgnoreCase(username)) {
-                return contact;
-            }
-        }
-        return null;
-    }
-
-    // Getters and setters for user attributes
     
     /**
      * Returns the user's unique identifier.
@@ -157,38 +94,6 @@ public class User implements Serializable{
      */
     public int getPort() {
         return port;
-    }
-
-    /**
-     * Returns the list of contacts the user has.
-     * 
-     * @return A list of contacts.
-     */
-    public List<User> getContacts() {
-        return contacts;
-    }
-
-    /**
-     * Shows the list of contacts with their username, IP address, and port.
-     */
-    public void showContacts() {
-        if (contacts.isEmpty()) {
-            System.out.println("No contacts found.");
-        } else {
-            System.out.println("Contacts:");
-            for (User contact : contacts) {
-                System.out.println("Username: " + contact.getUserName() + " | IP Address: " + contact.getIpAddress() + " | Port: " + contact.getPort());
-            }
-        }
-    }
-
-    /**
-     * Returns the list of conversations this user is part of.
-     * 
-     * @return A list of conversations.
-     */
-    public List<Conversation> getConversations() {
-        return conversations;
     }
 
     @Override

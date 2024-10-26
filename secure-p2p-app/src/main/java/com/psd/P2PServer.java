@@ -12,6 +12,8 @@ import javax.net.ssl.*;
 import com.psd.entities.Message;
 
 import java.io.*;
+import java.net.BindException;
+import java.net.InetAddress;
 import java.security.KeyManagementException;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
@@ -31,7 +33,7 @@ public class P2PServer {
 
     private int port;  // The port on which the server listens
     private SSLServerSocket serverSocket;
-    private volatile boolean running = true;
+    private volatile boolean running = true; // Will be modified by different threads
     private BorderPane mainMenuLayout;  // Reference to the main layout in the JavaFX UI
     private static Map<String, Conversation> conversations;
 
@@ -39,18 +41,21 @@ public class P2PServer {
         this.port = port;
         this.mainMenuLayout = mainMenuLayout;  // Initialize the layout reference
         this.conversations = new HashMap<>();
+
         new Thread(() -> {
             start();  // This will listen in the background
         }).start();
     }
 
+
     /**
      * Starts the server to listen for incoming messages on the specified port.
-     * @throws KeyManagementException 
-     * @throws NoSuchAlgorithmException 
-     * @throws KeyStoreException 
-     * @throws UnrecoverableKeyException 
-     * @throws CertificateException 
+     *
+     * @throws KeyManagementException
+     * @throws NoSuchAlgorithmException
+     * @throws KeyStoreException
+     * @throws UnrecoverableKeyException
+     * @throws CertificateException
      */
     public void start() {
         try {
@@ -59,7 +64,7 @@ public class P2PServer {
             KeyManagerFactory kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
             KeyStore ks = KeyStore.getInstance("JKS");
 
-            // Load the keystore 
+            // Load the keystore
             try (InputStream keyStoreStream = new FileInputStream("keystore.jks")) {
                 ks.load(keyStoreStream, "psd2024".toCharArray());  // Use your keystore password
             }
@@ -81,45 +86,27 @@ public class P2PServer {
 
             // Create SSLServerSocket
             SSLServerSocketFactory ssf = sslContext.getServerSocketFactory();
-            serverSocket = (SSLServerSocket) ssf.createServerSocket(port);
+            serverSocket = (SSLServerSocket) ssf.createServerSocket(port, 50, InetAddress.getByName("localhost"));
 
-            System.out.println("P2PServer: Created socket with this data: " + serverSocket.getInetAddress().getHostAddress() + ":" + serverSocket.getLocalPort());
+            System.out.println("P2PServer: Created socket with this data: " + serverSocket.getInetAddress().getHostAddress() +
+                    ":" + serverSocket.getLocalPort());
 
             // Continuously listen for incoming connections
             while (running) {
-                try {
-                    SSLSocket socket = (SSLSocket) serverSocket.accept();  // Accept incoming connection
-                    new Thread(new ClientHandler(socket, mainMenuLayout)).start();  // Handle each client in a new thread
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
+                SSLSocket socket = (SSLSocket) serverSocket.accept();  // Accept incoming connection
+                new Thread(new ClientHandler(socket, mainMenuLayout)).start();  // Handle each client in a new thread
             }
-        } catch (NoSuchAlgorithmException | KeyManagementException | KeyStoreException | UnrecoverableKeyException | CertificateException | IOException e) {
-            e.printStackTrace();  // Handle SSL-related exceptions here
+
+        } catch (UnrecoverableKeyException | IOException | NoSuchAlgorithmException | CertificateException |
+                 KeyStoreException | KeyManagementException e) {
+            throw new RuntimeException(e);
         }
     }
 
-    // Call this method to stop the server
-    public void stop() {
-        running = false;
-        try {
-            if (serverSocket != null && !serverSocket.isClosed()) {
-                serverSocket.close();
-                System.out.println("Server stopped.");
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
-
-    private static Message deserializeMessage(byte[] data) throws IOException, ClassNotFoundException {
-        try (ByteArrayInputStream byteIn = new ByteArrayInputStream(data);
-            ObjectInputStream in = new ObjectInputStream(byteIn)) {
-            return (Message) in.readObject();
-        }
-    }
     public boolean sendDirectMessage(Message message, User sender, User receiver) {
         try {
+            P2PClient client = new P2PClient(receiver.getIpAddress(), receiver.getPort());
+
             // Check if conversation exists between sender and receiver
             String conversationKey = getConversationKey(sender, receiver);
             Conversation conversation = conversations.get(conversationKey);
@@ -137,9 +124,6 @@ public class P2PServer {
             // Serialize the message
             byte[] serializedMessage = serializeMessage(message);
 
-            // Send the message using the P2P client
-            P2PClient client = new P2PClient(receiver.getIpAddress(), receiver.getPort());
-
             System.out.println("P2PClient: Send message to " + receiver.getIpAddress() + ":" + receiver.getPort());
 
             // Send the actual serialized message
@@ -147,10 +131,11 @@ public class P2PServer {
 
             return true;
 
-        } catch (IOException | KeyManagementException | NoSuchAlgorithmException | CertificateException | KeyStoreException | UnrecoverableKeyException e) {
+        } catch (IOException | KeyManagementException | NoSuchAlgorithmException | CertificateException |
+                 KeyStoreException | UnrecoverableKeyException e) {
             e.printStackTrace();
+            return false;
         }
-        return false;
     }
 
     private byte[] serializeMessage(Message message) throws IOException {
@@ -158,6 +143,13 @@ public class P2PServer {
              ObjectOutputStream out = new ObjectOutputStream(byteOut)) {
             out.writeObject(message);
             return byteOut.toByteArray();
+        }
+    }
+
+    private static Message deserializeMessage(byte[] data) throws IOException, ClassNotFoundException {
+        try (ByteArrayInputStream byteIn = new ByteArrayInputStream(data);
+             ObjectInputStream in = new ObjectInputStream(byteIn)) {
+            return (Message) in.readObject();
         }
     }
 
@@ -185,10 +177,10 @@ public class P2PServer {
      */
     public List<Conversation> getAllConversations(User user) {
         List<Conversation> userConversations = new ArrayList<>();
-        for (Conversation convo : conversations.values()) {
-            if (convo.getParticipant1().getUserID().equals(user.getUserID()) ||
-                    convo.getParticipant2().getUserID().equals(user.getUserID())) {
-                userConversations.add(convo);
+        for (Conversation conversation : conversations.values()) {
+            if (conversation.getParticipant1().getUserID().equals(user.getUserID()) ||
+                    conversation.getParticipant2().getUserID().equals(user.getUserID())) {
+                userConversations.add(conversation);
             }
         }
         return userConversations;
@@ -212,14 +204,12 @@ public class P2PServer {
                 // Read the message sent by the peer
                 DataInputStream dataIn = new DataInputStream(socket.getInputStream());
 
-                System.out.println("Clienthandler: Received message from " + socket.getInetAddress().getHostAddress() + ":" + socket.getLocalPort());
-        
                 // Read the length of the incoming message
                 int messageLength = dataIn.readInt();
-        
+
                 // Initialize a byte array to hold the exact message size
                 byte[] messageBytes = new byte[messageLength];
-        
+
                 // Read the message into the byte array
                 int totalBytesRead = 0;
                 while (totalBytesRead < messageLength) {
@@ -227,9 +217,11 @@ public class P2PServer {
                     if (bytesRead == -1) break; // End of stream
                     totalBytesRead += bytesRead;
                 }
-        
+
                 // Deserialize the message
                 Message message = deserializeMessage(messageBytes);
+
+                System.out.println("Clienthandler: Received message from " + message.getSender().getIpAddress() + ":" + message.getSender().getPort() );
 
                 // Check if conversation exists between sender and receiver
                 String conversationKey = getConversationKey(message.getSender(), message.getReceiver());
@@ -244,16 +236,17 @@ public class P2PServer {
 
                 // Add the message to the conversation
                 conversation.addMessage(message);
+
                 // Update the JavaFX UI on the JavaFX Application Thread
                 Platform.runLater(() -> {
                     // Create a new label with the received message
-                    Label messageLabel = new Label("Received message: " + message.getContent());
-    
+                    Label messageLabel = new Label("Received message from: " + message.getSender().getUserName());
+
                     // Set this label to the center of the mainMenuLayout
                     StackPane messagePane = new StackPane(messageLabel);
-                    //mainMenuLayout.setCenter(messagePane);  // Update the center with the received message
+                    mainMenuLayout.setCenter(messagePane);  // Update the center with the received message
                 });
-        
+
                 socket.close();  // Close the connection after the message is received
 
             } catch (IOException | ClassNotFoundException e) {

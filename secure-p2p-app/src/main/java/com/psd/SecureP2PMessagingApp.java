@@ -16,11 +16,15 @@ import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
+import javafx.scene.paint.Color;
 import javafx.stage.Stage;
 
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.net.BindException;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
 import java.security.PublicKey;
@@ -41,36 +45,32 @@ import java.time.format.DateTimeFormatter;
  * Main class for the Secure P2P Messaging Application.
  * Initializes services and provides a terminal-based interface for interaction.
  */
-public class SecureP2PMessagingApp extends Application{
+public class SecureP2PMessagingApp extends Application {
 
-    static BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(System.in));
-
-    static PublicKey publicKey = null;
-    static PrivateKey privateKey = null;
-
+    static PublicKey publicKey;
+    static PrivateKey privateKey;
     User currentUser;
-
-    //P2PNetwork userNetwork;
     P2PServer userServer;
 
-    public static void main(String[] args) throws IOException {
+    public static void main(String[] args) {
 
         try {
             KeyStore ks = KeyStore.getInstance("JKS");
             try (InputStream keyStoreStream = new FileInputStream("keystore.jks")) {
                 ks.load(keyStoreStream, "psd2024".toCharArray());
             }
-        
+
             // Load the private key from the keystore
-            Key key = ks.getKey("selfsigned", "psd2024".toCharArray()); 
+            Key key = ks.getKey("selfsigned", "psd2024".toCharArray());
             if (key instanceof PrivateKey) {
                 privateKey = (PrivateKey) key;
-        
+
                 // Load the corresponding public key from the certificate
                 java.security.cert.Certificate cert = ks.getCertificate("selfsigned");
                 publicKey = cert.getPublicKey();
             }
-        } catch (KeyStoreException | NoSuchAlgorithmException | UnrecoverableKeyException | CertificateException | IOException e) {
+        } catch (KeyStoreException | NoSuchAlgorithmException | UnrecoverableKeyException | CertificateException |
+                 IOException e) {
             e.printStackTrace();
         }
 
@@ -79,15 +79,19 @@ public class SecureP2PMessagingApp extends Application{
     }
 
     @Override
-    public void start(Stage primaryStage) throws Exception {
-        primaryStage.setTitle("User Details");
+    public void start(Stage primaryStage) {
+        primaryStage.setTitle("P2P Messaging App");
 
         // Create labels and text fields
         Label usernameLabel = new Label("Username:");
+        usernameLabel.setTextFill(Color.BLACK);
         TextField usernameInput = new TextField();
+        usernameInput.setPromptText("Enter your username");
 
         Label portLabel = new Label("Port:");
+        portLabel.setTextFill(Color.BLACK);
         TextField portInput = new TextField();
+        portInput.setPromptText("Enter your port number");
 
         // Create buttons
         Button submitButton = new Button("Submit");
@@ -95,11 +99,12 @@ public class SecureP2PMessagingApp extends Application{
         Button conversationsButton = new Button("Conversations");
         Button exitButton = new Button("Exit");
 
-        // Layout using GridPane for alignment
+        // Layout
         GridPane layout = new GridPane();
         layout.setHgap(10);
         layout.setVgap(10);
-        layout.setAlignment(Pos.CENTER); // Center the GridPane itself
+        layout.setAlignment(Pos.CENTER);
+        layout.setStyle("-fx-background-color: #f5f5f5; -fx-padding: 20;");
 
         // Add components to the layout
         layout.add(usernameLabel, 0, 0);
@@ -109,12 +114,13 @@ public class SecureP2PMessagingApp extends Application{
         layout.add(submitButton, 1, 2);
 
         // Set up the scene
-        Scene scene = new Scene(layout, 400, 200);
+        Scene scene = new Scene(layout, 350, 200);
         primaryStage.setScene(scene);
         primaryStage.show();
 
         //Layouts
         BorderPane mainMenuLayout = new BorderPane();
+        mainMenuLayout.setStyle("-fx-background-color: #ffffff; -fx-border-color: #dddddd; -fx-padding: 10;");
 
         // Set the button action to handle submission and switch to the main menu scene
         submitButton.setOnAction(e -> {
@@ -122,111 +128,114 @@ public class SecureP2PMessagingApp extends Application{
                 // Extract the username and port from input fields
                 String userName = usernameInput.getText();
                 int userPort = Integer.parseInt(portInput.getText());
+                String ipAddress = InetAddress.getByName("localhost").getHostAddress();
 
-                // Initialize the P2P network for the user
-                // Assuming P2PNetwork and User classes exist with the required constructors
-                /*userNetwork = new P2PNetwork(userPort);
-
-                userNetwork.connectPeer(currentUser, mainMenuLayout);
-                */
-                currentUser = new User(userName, publicKey, privateKey, "127.0.0.1", userPort);
+                currentUser = new User(userName, publicKey, privateKey, ipAddress, userPort);
                 userServer = new P2PServer(userPort, mainMenuLayout);
 
+                Label userDetailsLabel = new Label("User: " + userName + ", IP = " + ipAddress + ":" + userPort);
+                userDetailsLabel.setTextFill(Color.DARKGRAY);
 
                 // Create a top bar with user details
-                HBox topBar = new HBox();
-                topBar.setSpacing(10);
+                HBox topBar = new HBox(userDetailsLabel);
                 topBar.setAlignment(Pos.CENTER);
-                topBar.setStyle("-fx-border-color: black; -fx-border-width: 2; -fx-padding: 10;");
-                Label userDetailsLabel = new Label("User: " + userName + ", IP= 127.0.0.1: " + userPort);
-                topBar.getChildren().add(userDetailsLabel);
+                topBar.setStyle("-fx-padding: 10; -fx-background-color: #f0f0f0;");
 
-                // Create side bar main menu
-                VBox sideBar = new VBox();
-                sideBar.setSpacing(10);
-                sideBar.setAlignment(Pos.CENTER_LEFT);
-                sideBar.setStyle("-fx-border-color: black; -fx-border-width: 2; -fx-padding: 10;");
-                sideBar.getChildren().addAll(conversationsButton, sendDirectMessageButton, exitButton);
-
-                // Create the main menu layout with a BorderPane
-                mainMenuLayout.setTop(topBar);
-                mainMenuLayout.setLeft(sideBar);
+                // Create sidebar main menu
+                VBox sideBar = new VBox(10, conversationsButton, sendDirectMessageButton, exitButton);
+                sideBar.setAlignment(Pos.TOP_LEFT);
+                sideBar.setStyle("-fx-background-color: #f5f5f5; -fx-padding: 10;");
 
                 // Add a border to the center pane
-                StackPane centerPane = new StackPane();
-                centerPane.setStyle("-fx-border-color: black; -fx-border-width: 2; -fx-padding: 10;");
-                Label welcomeLabel = new Label("Welcome to the Main Menu, " + userName + "!");
-                centerPane.getChildren().add(welcomeLabel);
+                StackPane centerPane = new StackPane(new Label("Welcome to the Main Menu, " + userName + "!"));
+                centerPane.setStyle("-fx-padding: 20;");
+
+                mainMenuLayout.setTop(topBar);
+                mainMenuLayout.setLeft(sideBar);
                 mainMenuLayout.setCenter(centerPane);
 
-                // Add a border to the BorderPane itself
-                mainMenuLayout.setStyle("-fx-border-color: black; -fx-border-width: 2;");
-
                 // Set up the main menu scene
-                Scene mainMenuScene = new Scene(mainMenuLayout, 600, 400);
+                Scene mainMenuScene = new Scene(mainMenuLayout, 550, 400);
                 primaryStage.setScene(mainMenuScene);
 
-            } catch (NumberFormatException ex) {
+            } catch (RuntimeException ex) {
                 // Handle the error if the port is not a valid integer
                 portInput.setText("Enter a valid port number");
+            } catch (UnknownHostException ex) {
+                throw new RuntimeException(ex);
             }
         });
 
+        // Set the button action to prepare a direct message
         sendDirectMessageButton.setOnAction(event -> {
-            // Create the input fields and labels for adding a contact
-            Label contactUsernameLabel = new Label("Enter username:");
-            TextField contactUsernameInput = new TextField();
-        
-            Label contactIpLabel = new Label("Enter the user's IP address:");
-            TextField contactIpInput = new TextField();
-        
-            Label contactPortLabel = new Label("Enter the user's port:");
-            TextField contactPortInput = new TextField();
 
-            // Input fields for message
-            Label messageLabel = new Label("Enter your message:");
+            Label contactUsernameLabel = new Label("Username:");
+            contactUsernameLabel.setTextFill(Color.BLACK);
+            TextField contactUsernameInput = new TextField();
+            contactUsernameInput.setPromptText("Enter the receiver's username");
+
+            Label contactIpLabel = new Label("IP address:");
+            contactIpLabel.setTextFill(Color.BLACK);
+            TextField contactIpInput = new TextField();
+            contactIpInput.setPromptText("Enter the receiver's IP address");
+
+            Label contactPortLabel = new Label("Port:");
+            contactPortLabel.setTextFill(Color.BLACK);
+            TextField contactPortInput = new TextField();
+            contactPortInput.setPromptText("Enter the receiver's port");
+
+            Label messageLabel = new Label("Message:");
+            messageLabel.setTextFill(Color.BLACK);
             TextArea messageInput = new TextArea();
             messageInput.setWrapText(true);
-        
+            messageInput.setPrefHeight(100);
+            messageInput.setPromptText("Enter your message");
+
             Button sendButton = new Button("Send");
-        
-            // Create a new layout for the center pane to add contact details
+
+            // Layout
             VBox sendDirectMessageLayout = new VBox(10);
             sendDirectMessageLayout.setAlignment(Pos.CENTER);
-            sendDirectMessageLayout.getChildren().addAll(contactUsernameLabel, contactUsernameInput, contactIpLabel, contactIpInput, contactPortLabel, contactPortInput,messageLabel, messageInput, sendButton);
-        
-            // Set the new center pane to the BorderPane
+            sendDirectMessageLayout.setStyle("-fx-background-color: #f5f5f5; -fx-padding: 10;");
+            sendDirectMessageLayout.getChildren().addAll(
+                    contactUsernameLabel, contactUsernameInput,
+                    contactIpLabel, contactIpInput,
+                    contactPortLabel, contactPortInput,
+                    messageLabel, messageInput, sendButton
+            );
+
             mainMenuLayout.setCenter(sendDirectMessageLayout);
-        
-            // Set the action for the add contact submit button
+
+
+            // Set the button action to send a direct message and create a new conversation
             sendButton.setOnAction(submitEvent -> {
                 String receiverName = contactUsernameInput.getText();
                 String messageContent = messageInput.getText();
-                User receiver = new User(receiverName, publicKey, privateKey, contactIpInput.getText(), Integer.parseInt(contactPortInput.getText()));
-                if (receiverName != null && !messageContent.isEmpty()) {
-                    // Create and send the message
-                    Message message = new Message("1", currentUser, receiver, messageContent);
-                    boolean success = userServer.sendDirectMessage(message, currentUser, receiver);
 
-                    // Confirmation message
-                    Label confirmationLabel;
-                    if (success) {
-                        confirmationLabel = new Label("Message sent to " + receiverName);
+                try {
+                    if (!receiverName.isEmpty() && !messageContent.isEmpty()) {
+                        User receiver = new User(receiverName, publicKey, privateKey, contactIpInput.getText(),
+                                Integer.parseInt(contactPortInput.getText()));
+
+                        // Create a new message
+                        Message message = new Message("1", currentUser, receiver, messageContent);
+                        boolean success = userServer.sendDirectMessage(message, currentUser, receiver);
+
+                        Label confirmationLabel = new Label(success ? "Message sent to " + receiverName :
+                                "Failed to send message to " + receiverName);
+                        confirmationLabel.setTextFill(success ? Color.GREEN : Color.RED);
+                        mainMenuLayout.setCenter(new StackPane(confirmationLabel)); // Atualiza o centro com a confirmação
+
                     } else {
-                        confirmationLabel = new Label("Failed to send message to " + receiverName);
+                        if (receiverName.isEmpty()) {
+                            contactUsernameInput.setPromptText("Enter username");
+                        }
+                        if (messageContent.isEmpty()) {
+                            messageInput.setPromptText("Enter a message");
+                        }
                     }
-
-                    // Update the center pane with the confirmation message
-                    mainMenuLayout.setCenter(new StackPane(confirmationLabel));
- 
-                } else {
-                    // Handle case where no contact or message is provided
-                    if (receiverName == null) {
-                        contactUsernameInput.setPromptText("Enter username");
-                    }
-                    if (messageContent.isEmpty()) {
-                        messageInput.setPromptText("Enter a message");
-                    }
+                } catch (NumberFormatException ex) {
+                    contactPortInput.setPromptText("Enter a valid port number");
                 }
             });
         });
@@ -239,6 +248,8 @@ public class SecureP2PMessagingApp extends Application{
             // Create a layout to display the conversations
             VBox conversationsLayout = new VBox(10);
             conversationsLayout.setAlignment(Pos.CENTER);
+            conversationsLayout.setStyle("-fx-background-color: #f5f5f5; -fx-padding: 30; -fx-border-color: #ccc;" +
+                    " -fx-border-width: 1;");
 
             if (conversations.isEmpty()) {
                 // Display message if no conversations found
@@ -247,24 +258,32 @@ public class SecureP2PMessagingApp extends Application{
             } else {
                 // Label for selecting a conversation
                 Label selectConversationLabel = new Label("Select a conversation:");
-                conversationsLayout.getChildren().add(selectConversationLabel);
+                selectConversationLabel.setStyle("-fx-font-size: 14; -fx-font-weight: bold;");
 
                 // List of conversations
                 ComboBox<String> conversationComboBox = new ComboBox<>();
-                Map<String, Conversation> conversationMap = new HashMap<>();
+                conversationComboBox.setPrefWidth(300);
 
+                Map<String, Conversation> conversationMap = new HashMap<>();
                 for (int i = 0; i < conversations.size(); i++) {
-                    Conversation convo = conversations.get(i);
-                    User participant = convo.getParticipant1().equals(currentUser) ? convo.getParticipant2() : convo.getParticipant1();
-                    String convoLabel = (i + 1) + ". Conversation with " + participant.getUserName() + " (Started on " + convo.getStartTime() + ")";
-                    conversationComboBox.getItems().add(convoLabel);
-                    conversationMap.put(convoLabel, convo);
+                    Conversation conversation = conversations.get(i);
+                    User participant = conversation.getParticipant1().equals(currentUser) ? conversation.getParticipant2() : conversation.getParticipant1();
+
+                    DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+                    String formattedTimestamp = conversation.getStartTime().format(formatter);
+                    String conversationLabel = (i + 1) + ". Conversation with " + participant.getUserName() +
+                            " (Started on " + formattedTimestamp + ")";
+
+                    conversationComboBox.getItems().add(conversationLabel);
+                    conversationMap.put(conversationLabel, conversation);
                 }
 
                 Button viewConversationButton = new Button("View Conversation");
+                viewConversationButton.setStyle("-fx-font-size: 12; -fx-background-color: #4CAF50; -fx-text-fill: white;" +
+                        " -fx-padding: 5 10 5 10;");
 
                 // Add elements to layout
-                conversationsLayout.getChildren().addAll(conversationComboBox, viewConversationButton);
+                conversationsLayout.getChildren().addAll(selectConversationLabel, conversationComboBox, viewConversationButton);
 
                 // Handle view conversation button click
                 viewConversationButton.setOnAction(viewEvent -> {
@@ -276,16 +295,15 @@ public class SecureP2PMessagingApp extends Application{
                         // Create a vertical layout to hold the conversation details and input area
                         VBox conversationLayout = new VBox(10);
                         conversationLayout.setAlignment(Pos.CENTER);
+                        conversationLayout.setStyle("-fx-background-color: #ffffff; -fx-padding: 20; -fx-border-color: #ccc; -fx-border-width: 1;");
 
-                        // Top horizontal box for chat logs
-                        HBox chatLogsBox = new HBox(10);
-                        chatLogsBox.setAlignment(Pos.CENTER);
-
-                        // Label for conversation header
                         Label conversationHeader = new Label("--- Conversation with " + otherParticipant.getUserName() + " ---");
+                        conversationHeader.setStyle("-fx-font-size: 12; -fx-font-weight: bold; -fx-padding: 10;");
 
-                        // VBox to hold the messages, wrapped in a ScrollPane
+                        // Chat logs area
                         VBox chatLogs = new VBox(10);
+                        chatLogs.setStyle("-fx-background-color: #e0e0e0; -fx-padding: 10;");
+
                         for (Message msg : selectedConvo.getMessages()) {
                             DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
                             String formattedTimestamp = msg.getTimestamp().format(formatter);
@@ -299,24 +317,22 @@ public class SecureP2PMessagingApp extends Application{
                         scrollPane.setFitToWidth(true);
                         scrollPane.setPrefHeight(400); // Adjust the height as needed to fit the layout
 
-                        chatLogsBox.getChildren().add(scrollPane);
-
-                        // Bottom horizontal box for text input and send button
+                        // New message input box
                         HBox inputBox = new HBox(10);
                         inputBox.setAlignment(Pos.CENTER_LEFT);
 
-                        // Text area for new message input
                         TextArea newMessageInput = new TextArea();
                         newMessageInput.setWrapText(true);
-                        newMessageInput.setPrefHeight(50); // Set a fixed height for the text area
+                        newMessageInput.setPrefHeight(50);
 
                         // Send message button
                         Button sendMessageButton = new Button("Send Message");
+                        sendMessageButton.setStyle("-fx-background-color: #4CAF50; -fx-text-fill: white; -fx-font-size: 12; -fx-padding: 5 10 5 10;");
 
                         inputBox.getChildren().addAll(newMessageInput, sendMessageButton);
 
                         // Add the top chat logs and bottom input box to the vertical layout
-                        conversationLayout.getChildren().addAll(conversationHeader, chatLogsBox, inputBox);
+                        conversationLayout.getChildren().addAll(conversationHeader, scrollPane, inputBox);
 
                         // Set action for send message button
                         sendMessageButton.setOnAction(sendEvent -> {
@@ -328,14 +344,14 @@ public class SecureP2PMessagingApp extends Application{
                                 boolean success = userServer.sendDirectMessage(newMessage, currentUser, otherParticipant);
 
                                 newMessageInput.clear();
-                    
+
                                 // Dynamically add the new message to the chat log
                                 String senderName = "You";
                                 DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
                                 String formattedTimestamp = newMessage.getTimestamp().format(formatter);
                                 Label messageLabel = new Label(senderName + " [" + formattedTimestamp + "]: " + newMessage.getContent());
                                 chatLogs.getChildren().add(messageLabel); // Update the chat log with the new message
-                    
+
                                 // Optionally, scroll to the bottom of the chat log
                                 scrollPane.setVvalue(1.0); // This ensures the scroll pane moves to the latest message
                                 if (!success) {
@@ -362,8 +378,7 @@ public class SecureP2PMessagingApp extends Application{
             primaryStage.close(); // Close the primary stage to exit the application
             System.exit(0); // Ensures the program is terminated properly
         });
-        
+
     }
 
-    
 }

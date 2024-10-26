@@ -69,17 +69,6 @@ public class Conversation {
         return participant2;
     }
 
-    /**
-     * Returns the participants in the conversation.
-     * 
-     * @return A list containing the two participants in the conversation.
-     */
-    public List<User> getParticipants() {
-        List<User> pList = new ArrayList<>();
-        pList.add(participant1);
-        pList.add(participant2);
-        return pList;
-    }
 
     /**
      * Returns the timestamp of when the conversation started.
@@ -90,37 +79,4 @@ public class Conversation {
         return startTime;
     }
 
-    /**
-     * Returns the other participant in the conversation, given a user.
-     * 
-     * @param user The user for whom to find the other participant.
-     * @return The other participant in the conversation, or null if the user is not part of the conversation.
-     */
-    public User getOtherParticipant(User user) {
-        //TODO
-        return null;
-    }
-
-    /**
-     * Checks if the given user is a participant in the conversation.
-     * 
-     * @param user The user to check.
-     * @return True if the user is a participant, false otherwise.
-     */
-    public boolean isParticipant(User user) {
-        //TODO
-        return false;
-    }
-
-    /**
-     * Returns a formatted string representation of the conversation.
-     * Shows the participants and the list of messages exchanged.
-     * 
-     * @return A string representation of the conversation.
-     */
-    @Override
-    public String toString() {
-        //TODO
-        return null;
-    }
 }

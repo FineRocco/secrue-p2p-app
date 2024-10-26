@@ -20,17 +20,12 @@ public class Message implements Serializable{
     // UserID of the receiver
     private User receiver;
 
-    // The encrypted content of the message
-    private String encryptedContent;
-
     // The actual (plain) content of the message before encryption (not stored after encryption)
     private String content;
 
     // The timestamp of when the message was created
     private LocalDateTime timestamp;
 
-    // The digital signature of the message (for authenticity and integrity)
-    private String signature;
 
     /**
      * Constructs a new Message.
@@ -48,58 +43,11 @@ public class Message implements Serializable{
         this.timestamp = LocalDateTime.now();
     }
 
-    /**
-     * Encrypts the content of the message using the recipient's public key.
-     * 
-     * @param content    The plain-text message content to encrypt.
-     * @param publicKey  The public key of the recipient.
-     * @return The encrypted content as a string.
-     */
-    public String encryptMessage(PublicKey publicKey) {
-        //TODO
-        return null;
-    }
-
-    /**
-     * Decrypts the content of the message using the recipient's private key.
-     * 
-     * @param encryptedContent The encrypted message content.
-     * @param privateKey       The private key of the recipient.
-     * @return The decrypted plain-text content of the message.
-     */
-    public String decryptMessage(PrivateKey privateKey) {
-        //TODO
-        return null;
-    }
-
-    /**
-     * Signs the message using the sender's private key to ensure integrity and authenticity.
-     * 
-     * @param privateKey The private key of the sender.
-     * @return The digital signature of the message.
-     */
-    public String signMessage(PrivateKey privateKey) {
-        //TODO
-        return null;
-    }
-
-    /**
-     * Verifies the signature of the message using the sender's public key.
-     * This ensures that the message has not been tampered with and was indeed sent by the claimed sender.
-     * 
-     * @param publicKey The public key of the sender.
-     * @return True if the signature is valid, false otherwise.
-     */
-    public boolean verifySignature(PublicKey publicKey) {
-        //TODO
-        return false;
-    }
-
     // Getters and setters for message attributes
-    
+
     /**
      * Returns the unique identifier of the message.
-     * 
+     *
      * @return The messageID.
      */
     public String getMessageID() {
@@ -142,23 +90,6 @@ public class Message implements Serializable{
         this.content = content;
     }
 
-    /**
-     * Returns the encrypted content of the message.
-     * 
-     * @return The encrypted message content.
-     */
-    public String getEncryptedContent() {
-        return encryptedContent;
-    }
-
-    /**
-     * Sets the encrypted content of the message.
-     * 
-     * @param encryptedContent The encrypted message content.
-     */
-    public void setEncryptedContent(String encryptedContent) {
-        this.encryptedContent = encryptedContent;
-    }
 
     /**
      * Returns the timestamp when the message was created.
@@ -169,21 +100,4 @@ public class Message implements Serializable{
         return timestamp;
     }
 
-    /**
-     * Returns the digital signature of the message.
-     * 
-     * @return The digital signature as a base64 string.
-     */
-    public String getSignature() {
-        return signature;
-    }
-
-    /**
-     * Sets the digital signature of the message.
-     * 
-     * @param signature The digital signature of the message.
-     */
-    public void setSignature(String signature) {
-        this.signature = signature;
-    }
 }

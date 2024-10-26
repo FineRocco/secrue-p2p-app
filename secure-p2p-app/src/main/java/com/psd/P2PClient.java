@@ -58,8 +58,4 @@ public class P2PClient {
         dataOut.flush();
     }
 
-    public void close() throws IOException {
-        dataOut.close();
-        clientSocket.close();
-    }
 }
