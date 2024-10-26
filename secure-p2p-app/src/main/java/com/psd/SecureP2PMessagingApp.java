@@ -91,9 +91,6 @@ public class SecureP2PMessagingApp extends Application{
 
         // Create buttons
         Button submitButton = new Button("Submit");
-        Button addContactButton = new Button("Add Contact");
-        Button seeContactsButton = new Button("See your Contacts");
-        Button sendContMessageButton = new Button("Send Message");
         Button sendDirectMessageButton = new Button("Send Direct Message");
         Button conversationsButton = new Button("Conversations");
         Button exitButton = new Button("Exit");
@@ -149,7 +146,7 @@ public class SecureP2PMessagingApp extends Application{
                 sideBar.setSpacing(10);
                 sideBar.setAlignment(Pos.CENTER_LEFT);
                 sideBar.setStyle("-fx-border-color: black; -fx-border-width: 2; -fx-padding: 10;");
-                sideBar.getChildren().addAll(conversationsButton, sendContMessageButton, sendDirectMessageButton, addContactButton, seeContactsButton, exitButton);
+                sideBar.getChildren().addAll(conversationsButton, sendDirectMessageButton, exitButton);
 
                 // Create the main menu layout with a BorderPane
                 mainMenuLayout.setTop(topBar);
@@ -226,74 +223,6 @@ public class SecureP2PMessagingApp extends Application{
                     // Handle case where no contact or message is provided
                     if (receiverName == null) {
                         contactUsernameInput.setPromptText("Enter username");
-                    }
-                    if (messageContent.isEmpty()) {
-                        messageInput.setPromptText("Enter a message");
-                    }
-                }
-            });
-        });
-
-        sendContMessageButton.setOnAction(event -> {
-            // Create a layout to display the contacts and message input
-            VBox sendMessageLayout = new VBox(10);
-            sendMessageLayout.setAlignment(Pos.CENTER);
-
-            // Label to display contacts
-            Label contactsLabel = new Label("Your Contacts:");
-            sendMessageLayout.getChildren().add(contactsLabel);
-
-            // Fetch and display the contacts
-            ComboBox<String> contactComboBox = new ComboBox<>();
-            for (User contact : currentUser.getContacts()) {
-                contactComboBox.getItems().add(contact.getUserName());
-            }
-
-            // Input fields for message
-            Label messageLabel = new Label("Enter your message:");
-            TextArea messageInput = new TextArea();
-            messageInput.setWrapText(true);
-            Button sendButton = new Button("Send");
-
-            // Add all elements to the layout
-            sendMessageLayout.getChildren().addAll(contactComboBox, messageLabel, messageInput, sendButton);
-
-            // Set the new layout to the center pane of the BorderPane
-            mainMenuLayout.setCenter(sendMessageLayout);
-
-            // Set the action for the send button
-            sendButton.setOnAction(sendEvent -> {
-                String receiverName = contactComboBox.getValue();
-                String messageContent = messageInput.getText();
-
-                if (receiverName != null && !messageContent.isEmpty()) {
-                    // Find the peer in contacts
-                    User receiver = currentUser.findContactByUsername(receiverName);
-
-                    if (receiver != null) {
-                        // Create and send the message
-                        Message message = new Message("1", currentUser, receiver, messageContent);
-                        boolean success = userServer.sendDirectMessage(message, currentUser, receiver);
-
-                        // Confirmation message
-                        Label confirmationLabel;
-                        if (success) {
-                            confirmationLabel = new Label("Message sent to " + receiverName);
-                        } else {
-                            confirmationLabel = new Label("Failed to send message to " + receiverName);
-                        }
-
-                        // Update the center pane with the confirmation message
-                        mainMenuLayout.setCenter(new StackPane(confirmationLabel));
-                    } else {
-                        // Handle case where the contact is not found
-                        Label errorLabel = new Label("Peer not found.");
-                        mainMenuLayout.setCenter(new StackPane(errorLabel));
-                    }
-                } else {
-                    // Handle case where no contact or message is provided
-                    if (receiverName == null) {
-                        contactComboBox.setPromptText("Select a contact");
                     }
                     if (messageContent.isEmpty()) {
                         messageInput.setPromptText("Enter a message");
@@ -426,73 +355,6 @@ public class SecureP2PMessagingApp extends Application{
 
             // Set the conversations layout to the center of the main layout
             mainMenuLayout.setCenter(conversationsLayout);
-        });
-
-        addContactButton.setOnAction(event -> {
-            // Create the input fields and labels for adding a contact
-            Label contactUsernameLabel = new Label("Enter the contact's username:");
-            TextField contactUsernameInput = new TextField();
-        
-            Label contactIpLabel = new Label("Enter the contact's IP address:");
-            TextField contactIpInput = new TextField();
-        
-            Label contactPortLabel = new Label("Enter the contact's port:");
-            TextField contactPortInput = new TextField();
-        
-            Button addContactSubmitButton = new Button("Add Contact");
-        
-            // Create a new layout for the center pane to add contact details
-            VBox addContactLayout = new VBox(10);
-            addContactLayout.setAlignment(Pos.CENTER);
-            addContactLayout.getChildren().addAll(contactUsernameLabel, contactUsernameInput, contactIpLabel, contactIpInput, contactPortLabel, contactPortInput, addContactSubmitButton);
-        
-            // Set the new center pane to the BorderPane
-            mainMenuLayout.setCenter(addContactLayout);
-        
-            // Set the action for the add contact submit button
-            addContactSubmitButton.setOnAction(submitEvent -> {
-                try {
-                    // Extract the entered contact details
-                    String contactUsername = contactUsernameInput.getText();
-                    String contactIp = contactIpInput.getText();
-                    int contactPort = Integer.parseInt(contactPortInput.getText());
-        
-                    // Create a new User object for the contact
-                    User newContact = new User(contactUsername, null, null, contactIp, contactPort);
-        
-                    // Add the new contact to the current user's contact list
-                    currentUser.addContact(newContact);
-        
-                    // Confirmation message
-                    Label confirmationLabel = new Label("Contact " + contactUsername + " added successfully.");
-        
-                    // Update the center pane with the confirmation message
-                    mainMenuLayout.setCenter(new StackPane(confirmationLabel));
-        
-                } catch (NumberFormatException ex) {
-                    // Handle invalid port input
-                    contactPortInput.setText("Enter a valid port number");
-                }
-            });
-        });
-
-        seeContactsButton.setOnAction(event -> {
-            // Create a layout to display the contacts
-            VBox contactsLayout = new VBox(10);
-            contactsLayout.setAlignment(Pos.CENTER);
-        
-            // Label for contacts section
-            Label contactsLabel = new Label("Your Contacts:");
-            contactsLayout.getChildren().add(contactsLabel);
-        
-            // Fetch and display the contacts
-            for (User contact : currentUser.getContacts()) {
-                Label contactLabel = new Label("Username: " + contact.getUserName() + ", IP: " + contact.getIpAddress() + ", Port: " + contact.getPort());
-                contactsLayout.getChildren().add(contactLabel);
-            }
-        
-            // Set the new layout to the center pane of the BorderPane
-            mainMenuLayout.setCenter(contactsLayout);
         });
 
         exitButton.setOnAction(event -> {

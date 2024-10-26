@@ -83,6 +83,8 @@ public class P2PServer {
             SSLServerSocketFactory ssf = sslContext.getServerSocketFactory();
             serverSocket = (SSLServerSocket) ssf.createServerSocket(port);
 
+            System.out.println("P2PServer: Created socket with this data: " + serverSocket.getInetAddress().getHostAddress() + ":" + serverSocket.getLocalPort());
+
             // Continuously listen for incoming connections
             while (running) {
                 try {
@@ -137,6 +139,8 @@ public class P2PServer {
 
             // Send the message using the P2P client
             P2PClient client = new P2PClient(receiver.getIpAddress(), receiver.getPort());
+
+            System.out.println("P2PClient: Send message to " + receiver.getIpAddress() + ":" + receiver.getPort());
 
             // Send the actual serialized message
             client.sendMessage(serializedMessage);
@@ -207,6 +211,8 @@ public class P2PServer {
             try {
                 // Read the message sent by the peer
                 DataInputStream dataIn = new DataInputStream(socket.getInputStream());
+
+                System.out.println("Clienthandler: Received message from " + socket.getInetAddress().getHostAddress() + ":" + socket.getLocalPort());
         
                 // Read the length of the incoming message
                 int messageLength = dataIn.readInt();
@@ -245,7 +251,7 @@ public class P2PServer {
     
                     // Set this label to the center of the mainMenuLayout
                     StackPane messagePane = new StackPane(messageLabel);
-                    mainMenuLayout.setCenter(messagePane);  // Update the center with the received message
+                    //mainMenuLayout.setCenter(messagePane);  // Update the center with the received message
                 });
         
                 socket.close();  // Close the connection after the message is received
