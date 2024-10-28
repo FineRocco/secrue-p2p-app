@@ -1,5 +1,7 @@
 package com.psd;
 
+import com.psd.entities.User;
+
 import javax.net.ssl.*;
 import java.io.*;
 import java.security.KeyManagementException;
@@ -12,9 +14,9 @@ import java.security.cert.CertificateException;
 public class P2PClient {
 
     private SSLSocket clientSocket;
-    private DataOutputStream dataOut;
+    private SSLSocketFactory ssf;
 
-    public P2PClient(String peerAddress, int peerPort) throws IOException, KeyManagementException, NoSuchAlgorithmException, CertificateException, KeyStoreException, UnrecoverableKeyException {
+    public P2PClient() throws IOException, KeyManagementException, NoSuchAlgorithmException, CertificateException, KeyStoreException, UnrecoverableKeyException {
         // Setup SSL context with the keystore and truststore
         SSLContext sslContext = SSLContext.getInstance("TLS");
         KeyManagerFactory kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
@@ -42,14 +44,15 @@ public class P2PClient {
         sslContext.init(kmf.getKeyManagers(), tmf.getTrustManagers(), null);
 
         // Create an SSLSocketFactory from the SSLContext
-        SSLSocketFactory ssf = sslContext.getSocketFactory();
-        clientSocket = (SSLSocket) ssf.createSocket(peerAddress, peerPort);
+        ssf = sslContext.getSocketFactory();
 
-        // Initialize DataOutputStream with the socket's output stream
-        dataOut = new DataOutputStream(clientSocket.getOutputStream());
     }
 
-    public void sendMessage(byte[] message) throws IOException {
+    public void sendMessage(User receiver, byte[] message) throws IOException {
+        clientSocket = (SSLSocket) ssf.createSocket(receiver.getIpAddress(), receiver.getPort());
+
+        // Initialize DataOutputStream with the socket's output stream
+        DataOutputStream dataOut = new DataOutputStream(clientSocket.getOutputStream());
         // Send the length of the message first
         dataOut.writeInt(message.length);
 

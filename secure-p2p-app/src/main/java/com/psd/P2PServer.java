@@ -12,8 +12,9 @@ import javax.net.ssl.*;
 import com.psd.entities.Message;
 
 import java.io.*;
-import java.net.BindException;
 import java.net.InetAddress;
+import java.net.ServerSocket;
+import java.net.Socket;
 import java.security.KeyManagementException;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
@@ -31,14 +32,17 @@ import java.util.Map;
  */
 public class P2PServer {
 
+    private User user;
     private int port;  // The port on which the server listens
     private SSLServerSocket serverSocket;
     private volatile boolean running = true; // Will be modified by different threads
     private BorderPane mainMenuLayout;  // Reference to the main layout in the JavaFX UI
     private static Map<String, Conversation> conversations;
+    private P2PClient client;
 
-    public P2PServer(int port, BorderPane mainMenuLayout) {
-        this.port = port;
+    public P2PServer(User user, BorderPane mainMenuLayout) {
+        this.user = user;
+        this.port = user.getPort();
         this.mainMenuLayout = mainMenuLayout;  // Initialize the layout reference
         this.conversations = new HashMap<>();
 
@@ -91,6 +95,7 @@ public class P2PServer {
             System.out.println("P2PServer: Created socket with this data: " + serverSocket.getInetAddress().getHostAddress() +
                     ":" + serverSocket.getLocalPort());
 
+
             // Continuously listen for incoming connections
             while (running) {
                 SSLSocket socket = (SSLSocket) serverSocket.accept();  // Accept incoming connection
@@ -105,7 +110,7 @@ public class P2PServer {
 
     public boolean sendDirectMessage(Message message, User sender, User receiver) {
         try {
-            P2PClient client = new P2PClient(receiver.getIpAddress(), receiver.getPort());
+            client = new P2PClient();
 
             // Check if conversation exists between sender and receiver
             String conversationKey = getConversationKey(sender, receiver);
@@ -127,7 +132,7 @@ public class P2PServer {
             System.out.println("P2PClient: Send message to " + receiver.getIpAddress() + ":" + receiver.getPort());
 
             // Send the actual serialized message
-            client.sendMessage(serializedMessage);
+            client.sendMessage(receiver, serializedMessage);
 
             return true;
 
@@ -135,6 +140,21 @@ public class P2PServer {
                  KeyStoreException | UnrecoverableKeyException e) {
             e.printStackTrace();
             return false;
+        }
+    }
+
+    private byte[] serializeUser(User user) throws IOException {
+        try (ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
+             ObjectOutputStream out = new ObjectOutputStream(byteOut)) {
+            out.writeObject(user);
+            return byteOut.toByteArray();
+        }
+    }
+
+        private static User deserializeUser(byte[] data) throws IOException, ClassNotFoundException {
+        try (ByteArrayInputStream byteIn = new ByteArrayInputStream(data);
+             ObjectInputStream in = new ObjectInputStream(byteIn)) {
+            return (User) in.readObject();
         }
     }
 

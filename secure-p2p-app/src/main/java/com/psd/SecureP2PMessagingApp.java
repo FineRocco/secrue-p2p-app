@@ -25,19 +25,13 @@ import java.io.InputStreamReader;
 import java.net.BindException;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
-import java.security.NoSuchAlgorithmException;
-import java.security.PrivateKey;
-import java.security.PublicKey;
+import java.security.*;
 import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
 
 import java.io.FileInputStream;
 import java.io.InputStream;
-import java.security.Key;
-import java.security.KeyStore;
-import java.security.KeyStoreException;
-import java.security.UnrecoverableKeyException;
 import java.security.cert.CertificateException;
 import java.time.format.DateTimeFormatter;
 
@@ -51,6 +45,8 @@ public class SecureP2PMessagingApp extends Application {
     static PrivateKey privateKey;
     User currentUser;
     P2PServer userServer;
+
+    P2PClient userClient;
 
     public static void main(String[] args) {
 
@@ -131,7 +127,7 @@ public class SecureP2PMessagingApp extends Application {
                 String ipAddress = InetAddress.getByName("localhost").getHostAddress();
 
                 currentUser = new User(userName, publicKey, privateKey, ipAddress, userPort);
-                userServer = new P2PServer(userPort, mainMenuLayout);
+                userServer = new P2PServer(currentUser, mainMenuLayout);
 
                 Label userDetailsLabel = new Label("User: " + userName + ", IP = " + ipAddress + ":" + userPort);
                 userDetailsLabel.setTextFill(Color.DARKGRAY);

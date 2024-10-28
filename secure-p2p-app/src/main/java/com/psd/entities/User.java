@@ -41,7 +41,13 @@ public class User implements Serializable{
         this.ipAddress = ipAddress;
         this.port = port;
     }
-    
+
+    public User(String userName, String ipAddress, int port) {
+        this.username = userName;
+        this.ipAddress = ipAddress;
+        this.port = port;
+    }
+
     /**
      * Returns the user's unique identifier.
      * 
