@@ -4,6 +4,7 @@ import com.psd.entities.User;
 
 import javax.net.ssl.*;
 import java.io.*;
+import java.net.InetAddress;
 import java.security.KeyManagementException;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
@@ -76,8 +77,8 @@ public class P2PClient {
 
     private void sendUserToCentralServer(byte[] user)  {
         try {
-            clientSocket = (SSLSocket) ssf.createSocket("127.0.0.1", 8888);
-
+            clientSocket = (SSLSocket) ssf.createSocket(InetAddress.getLocalHost(), 8888);
+            System.out.println("ola");
             // Initialize DataOutputStream with the socket's output stream
             DataOutputStream dataOut = new DataOutputStream(clientSocket.getOutputStream());
             System.out.println("AQUI" + user.length);

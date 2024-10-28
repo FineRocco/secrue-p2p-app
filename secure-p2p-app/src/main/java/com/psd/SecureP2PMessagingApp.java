@@ -127,7 +127,9 @@ public class SecureP2PMessagingApp extends Application {
                 String ipAddress = InetAddress.getByName("localhost").getHostAddress();
 
                 currentUser = new User(userName, publicKey, privateKey, ipAddress, userPort);
+
                 userServer = new P2PServer(currentUser, mainMenuLayout);
+                System.out.println("ola3");
 
                 Label userDetailsLabel = new Label("User: " + userName + ", IP = " + ipAddress + ":" + userPort);
                 userDetailsLabel.setTextFill(Color.DARKGRAY);

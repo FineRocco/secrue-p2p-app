@@ -1,5 +1,6 @@
 package com.psd;
 
+import com.psd.entities.Message;
 import com.psd.entities.User;
 
 import javax.net.ssl.*;
@@ -22,7 +23,7 @@ public class CentralServer {
         }
 
         new Thread(() -> {
-            try (SSLServerSocket serverSocket = (SSLServerSocket) sslServerSocketFactory.createServerSocket(SERVER_PORT, 50, InetAddress.getByName("localhost"))) {
+            try (SSLServerSocket serverSocket = (SSLServerSocket) sslServerSocketFactory.createServerSocket(SERVER_PORT, 50, InetAddress.getLocalHost())) {
                 System.out.println("Central Server started on port: " + SERVER_PORT);
                 isRunning = true;
 
@@ -46,24 +47,31 @@ public class CentralServer {
     public static synchronized User getUser(String username) {
         return userRegistry.get(username);
     }
-
+    private static User deserializeUser(byte[] data) throws IOException, ClassNotFoundException {
+        try (ByteArrayInputStream byteIn = new ByteArrayInputStream(data);
+             ObjectInputStream in = new ObjectInputStream(byteIn)) {
+            return (User) in.readObject();
+        }
+    }
     private static SSLServerSocketFactory createSSLServerSocketFactory() {
         try {
+            // Setup SSL context with the keystore and truststore
             SSLContext sslContext = SSLContext.getInstance("TLS");
             KeyManagerFactory kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
             KeyStore ks = KeyStore.getInstance("JKS");
 
-            // Load the keystore
-            try (InputStream keyStoreStream = new FileInputStream("serverkeystore.jks")) {
-                ks.load(keyStoreStream, "centralServer".toCharArray());  // Use your keystore password
+            // Load the keystore (adjust the path to your keystore)
+            try (InputStream keyStoreStream = new FileInputStream("keystore.jks")) {
+                ks.load(keyStoreStream, "psd2024".toCharArray());
             }
 
-            kmf.init(ks, "centralServer".toCharArray());  // Initialize KeyManager with keystore password
+            // Initialize KeyManagerFactory with the keystore
+            kmf.init(ks, "psd2024".toCharArray());
 
             // Load the truststore
             KeyStore trustStore = KeyStore.getInstance("JKS");
-            try (InputStream trustStoreStream = new FileInputStream("servertruststore.jks")) {
-                trustStore.load(trustStoreStream, "centralServer".toCharArray());
+            try (InputStream trustStoreStream = new FileInputStream("truststore.jks")) {
+                trustStore.load(trustStoreStream, "psd2024".toCharArray());
             }
 
             // Initialize TrustManagerFactory with the truststore
@@ -74,6 +82,7 @@ public class CentralServer {
             sslContext.init(kmf.getKeyManagers(), tmf.getTrustManagers(), null);
 
             return sslContext.getServerSocketFactory();
+
         } catch (Exception e) {
             System.out.println("Error creating SSL context: " + e.getMessage());
             return null;
@@ -92,24 +101,30 @@ public class CentralServer {
 
         @Override
         public void run() {
-            try (DataInputStream objectIn = new DataInputStream(socket.getInputStream());
-                 DataOutputStream objectOut = new DataOutputStream(socket.getOutputStream())) {
+            try{
+                DataInputStream dataIn = new DataInputStream(socket.getInputStream());
 
-                // Read the User object from the client
-                //User receivedUser = (User) objectIn.readObject();
+                // Read the length of the incoming message
+                int messageLength = dataIn.readInt();
 
-                // Determine if this is a registration or lookup request based on User's IP and port
-                /* if (receivedUser.getIpAddress() == null && receivedUser.getPort() == 0) {
-                    // This is a lookup request
-                    User foundUser = getUser(receivedUser.getUserName());
-                    objectOut.writeObject(foundUser); // Send the user details if found
-                } else {*/
-                // This is a registration request
-                //registerUser(receivedUser); // Register the new user
-                //objectOut.writeObject("Registration successful for " + receivedUser.getUserName());
+                // Initialize a byte array to hold the exact message size
+                byte[] messageBytes = new byte[messageLength];
 
+                // Read the message into the byte array
+                int totalBytesRead = 0;
+                while (totalBytesRead < messageLength) {
+                    int bytesRead = dataIn.read(messageBytes, totalBytesRead, messageLength - totalBytesRead);
+                    if (bytesRead == -1) break; // End of stream
+                    totalBytesRead += bytesRead;
+                }
+
+                // Deserialize the message
+                User user = deserializeUser(messageBytes);
+
+                registerUser(user);
+                System.out.println(userRegistry.size());
                 socket.close();
-            } catch (IOException e) {
+            } catch (IOException | ClassNotFoundException e) {
                 System.out.println("Error handling client: " + e.getMessage());
 
             }

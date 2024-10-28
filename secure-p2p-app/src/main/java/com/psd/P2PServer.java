@@ -45,7 +45,9 @@ public class P2PServer {
         this.port = user.getPort();
         this.mainMenuLayout = mainMenuLayout;  // Initialize the layout reference
         this.conversations = new HashMap<>();
+        System.out.println("ola");
         this.client = new P2PClient(user);
+
         new Thread(() -> {
             start();  // This will listen in the background
         }).start();
