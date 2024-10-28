@@ -61,17 +61,17 @@ public class CentralServer {
             KeyStore ks = KeyStore.getInstance("JKS");
 
             // Load the keystore (adjust the path to your keystore)
-            try (InputStream keyStoreStream = new FileInputStream("keystore.jks")) {
-                ks.load(keyStoreStream, "psd2024".toCharArray());
+            try (InputStream keyStoreStream = new FileInputStream("serverkeystore.jks")) {
+                ks.load(keyStoreStream, "centralServer".toCharArray());
             }
 
             // Initialize KeyManagerFactory with the keystore
-            kmf.init(ks, "psd2024".toCharArray());
+            kmf.init(ks, "centralServer".toCharArray());
 
             // Load the truststore
             KeyStore trustStore = KeyStore.getInstance("JKS");
-            try (InputStream trustStoreStream = new FileInputStream("truststore.jks")) {
-                trustStore.load(trustStoreStream, "psd2024".toCharArray());
+            try (InputStream trustStoreStream = new FileInputStream("servertruststore.jks")) {
+                trustStore.load(trustStoreStream, "centralServer".toCharArray());
             }
 
             // Initialize TrustManagerFactory with the truststore
