@@ -45,7 +45,7 @@ public class P2PServer {
         this.port = user.getPort();
         this.mainMenuLayout = mainMenuLayout;  // Initialize the layout reference
         this.conversations = new HashMap<>();
-
+        this.client = new P2PClient(user);
         new Thread(() -> {
             start();  // This will listen in the background
         }).start();
@@ -90,11 +90,10 @@ public class P2PServer {
 
             // Create SSLServerSocket
             SSLServerSocketFactory ssf = sslContext.getServerSocketFactory();
-            serverSocket = (SSLServerSocket) ssf.createServerSocket(port, 50, InetAddress.getByName("localhost"));
+            serverSocket = (SSLServerSocket) ssf.createServerSocket(port, 50, InetAddress.getByName(user.getIpAddress()));
 
             System.out.println("P2PServer: Created socket with this data: " + serverSocket.getInetAddress().getHostAddress() +
                     ":" + serverSocket.getLocalPort());
-
 
             // Continuously listen for incoming connections
             while (running) {
@@ -110,7 +109,6 @@ public class P2PServer {
 
     public boolean sendDirectMessage(Message message, User sender, User receiver) {
         try {
-            client = new P2PClient();
 
             // Check if conversation exists between sender and receiver
             String conversationKey = getConversationKey(sender, receiver);
@@ -135,28 +133,11 @@ public class P2PServer {
             client.sendMessage(receiver, serializedMessage);
 
             return true;
-
-        } catch (IOException | KeyManagementException | NoSuchAlgorithmException | CertificateException |
-                 KeyStoreException | UnrecoverableKeyException e) {
-            e.printStackTrace();
+        } catch (IOException e) {
             return false;
         }
     }
 
-    private byte[] serializeUser(User user) throws IOException {
-        try (ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
-             ObjectOutputStream out = new ObjectOutputStream(byteOut)) {
-            out.writeObject(user);
-            return byteOut.toByteArray();
-        }
-    }
-
-        private static User deserializeUser(byte[] data) throws IOException, ClassNotFoundException {
-        try (ByteArrayInputStream byteIn = new ByteArrayInputStream(data);
-             ObjectInputStream in = new ObjectInputStream(byteIn)) {
-            return (User) in.readObject();
-        }
-    }
 
     private byte[] serializeMessage(Message message) throws IOException {
         try (ByteArrayOutputStream byteOut = new ByteArrayOutputStream();

@@ -157,7 +157,7 @@ public class SecureP2PMessagingApp extends Application {
             } catch (RuntimeException ex) {
                 // Handle the error if the port is not a valid integer
                 portInput.setText("Enter a valid port number");
-            } catch (UnknownHostException ex) {
+            }catch (UnknownHostException ex) {
                 throw new RuntimeException(ex);
             }
         });
