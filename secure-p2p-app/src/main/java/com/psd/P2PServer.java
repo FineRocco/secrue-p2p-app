@@ -45,7 +45,6 @@ public class P2PServer {
         this.port = user.getPort();
         this.mainMenuLayout = mainMenuLayout;  // Initialize the layout reference
         this.conversations = new HashMap<>();
-        System.out.println("ola");
         this.client = new P2PClient(user);
 
         new Thread(() -> {
@@ -120,7 +119,7 @@ public class P2PServer {
                 // Create a new conversation if one does not exist
                 conversation = new Conversation(sender, receiver);
                 conversations.put(conversationKey, conversation);
-                System.out.println("New conversation created between " + sender.getUserName() + " and " + receiver.getUserName());
+                System.out.println("New conversation created between " + sender.getUserID() + " and " + receiver.getUserID());
             }
 
             // Add the message to the conversation
@@ -234,7 +233,7 @@ public class P2PServer {
                     // Create a new conversation if one does not exist
                     conversation = new Conversation(message.getSender(), message.getReceiver());
                     conversations.put(conversationKey, conversation);
-                    System.out.println("New conversation created between " + message.getSender().getUserName() + " and " + message.getReceiver().getUserName());
+                    System.out.println("New conversation created between " + message.getSender().getUserID() + " and " + message.getReceiver().getUserID());
                 }
 
                 // Add the message to the conversation
@@ -243,7 +242,7 @@ public class P2PServer {
                 // Update the JavaFX UI on the JavaFX Application Thread
                 Platform.runLater(() -> {
                     // Create a new label with the received message
-                    Label messageLabel = new Label("Received message from: " + message.getSender().getUserName());
+                    Label messageLabel = new Label("Received message from: " + message.getSender().getUserID());
 
                     // Set this label to the center of the mainMenuLayout
                     StackPane messagePane = new StackPane(messageLabel);

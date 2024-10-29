@@ -7,13 +7,15 @@ import javax.net.ssl.*;
 import java.io.*;
 import java.net.InetAddress;
 import java.security.KeyStore;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class CentralServer {
     private static final ConcurrentHashMap<String, User> userRegistry = new ConcurrentHashMap<>(); // Stores username and associated user info
     private static volatile boolean isRunning = false;
     private static final int SERVER_PORT = 8888;
-
+    private static SSLSocketFactory ssf;
     public static void main(String[] args) {
         // Load SSL context
         SSLServerSocketFactory sslServerSocketFactory = createSSLServerSocketFactory();
@@ -25,8 +27,8 @@ public class CentralServer {
         new Thread(() -> {
             try (SSLServerSocket serverSocket = (SSLServerSocket) sslServerSocketFactory.createServerSocket(SERVER_PORT, 50, InetAddress.getLocalHost())) {
                 System.out.println("Central Server started on port: " + SERVER_PORT);
-                isRunning = true;
 
+                isRunning = true;
                 while (isRunning) {
                     SSLSocket clientSocket = (SSLSocket) serverSocket.accept();
                     new Thread(new ClientHandler(clientSocket)).start(); // Run each client handler in a new thread
@@ -39,20 +41,53 @@ public class CentralServer {
 
     // Registers a new user to the central server
     public static synchronized void registerUser(User user) {
-        userRegistry.put(user.getUserName(), user);
-        System.out.println("User registered: " + user.getUserName());
+        userRegistry.put(user.getUserID(), user);
+        System.out.println("User registered: " + user.getUserID());
     }
 
     // Fetches a user from the registry based on username
-    public static synchronized User getUser(String username) {
-        return userRegistry.get(username);
+    public static synchronized User getUser(String userId) {
+        return userRegistry.get(userId);
     }
+    private static byte[] serializeUser(User user) {
+        try (ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
+             ObjectOutputStream out = new ObjectOutputStream(byteOut)) {
+            out.writeObject(user);
+            return byteOut.toByteArray();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     private static User deserializeUser(byte[] data) throws IOException, ClassNotFoundException {
         try (ByteArrayInputStream byteIn = new ByteArrayInputStream(data);
              ObjectInputStream in = new ObjectInputStream(byteIn)) {
             return (User) in.readObject();
         }
     }
+    public static void sendUser(User toSend, User requestedUser) throws IOException {
+        System.out.println(toSend.getIpAddress() + " " + toSend.getPort());
+        SSLSocket clientSocket = (SSLSocket) ssf.createSocket(toSend.getIpAddress(), toSend.getPort());
+
+        // Initialize DataOutputStream with the socket's output stream
+        DataOutputStream dataOut = new DataOutputStream(clientSocket.getOutputStream());
+
+        if (requestedUser != null) {
+            byte[] userBytes = serializeUser(requestedUser);
+
+            // Send the length of the serialized user data
+            dataOut.writeInt(userBytes.length);
+
+            // Send the serialized user data
+            dataOut.write(userBytes);
+
+        } else {
+            // Send a message indicating user not found
+            dataOut.writeInt(0); // 0 indicates no user data sent
+        }
+        dataOut.flush();
+    }
+
     private static SSLServerSocketFactory createSSLServerSocketFactory() {
         try {
             // Setup SSL context with the keystore and truststore
@@ -81,6 +116,8 @@ public class CentralServer {
             // Initialize the SSLContext with both key managers and trust managers
             sslContext.init(kmf.getKeyManagers(), tmf.getTrustManagers(), null);
 
+            ssf = sslContext.getSocketFactory();
+
             return sslContext.getServerSocketFactory();
 
         } catch (Exception e) {
@@ -104,26 +141,38 @@ public class CentralServer {
             try{
                 DataInputStream dataIn = new DataInputStream(socket.getInputStream());
 
-                // Read the length of the incoming message
-                int messageLength = dataIn.readInt();
+                int nrUsers = dataIn.readInt();
+                List<User> users = new ArrayList<>(nrUsers);
 
-                // Initialize a byte array to hold the exact message size
-                byte[] messageBytes = new byte[messageLength];
+                for(int i = 0; i < nrUsers; i++) {
+                    // Read the length of the incoming message
+                    int messageLength = dataIn.readInt();
+                    // Initialize a byte array to hold the exact message size
+                    byte[] messageBytes = new byte[messageLength];
 
-                // Read the message into the byte array
-                int totalBytesRead = 0;
-                while (totalBytesRead < messageLength) {
-                    int bytesRead = dataIn.read(messageBytes, totalBytesRead, messageLength - totalBytesRead);
-                    if (bytesRead == -1) break; // End of stream
-                    totalBytesRead += bytesRead;
+                    // Read the message into the byte array
+                    int totalBytesRead = 0;
+                    while (totalBytesRead < messageLength) {
+                        int bytesRead = dataIn.read(messageBytes, totalBytesRead, messageLength - totalBytesRead);
+                        if (bytesRead == -1) break; // End of stream
+                        totalBytesRead += bytesRead;
+                    }
+
+                    // Deserialize the message
+                    users.add(deserializeUser(messageBytes));
+
+                    if(nrUsers == 1) {
+                        // If only one user is sent, it's a registration request
+                        registerUser(users.get(0));
+                        sendUser(users.get(0), users.get(0));
+                    }
+                    else{
+                        // If multiple users are sent, assume it's a request to retrieve a user
+                        sendUser(users.get(0), getUser(users.get(1).getUserID()));
+                    }
                 }
-
-                // Deserialize the message
-                User user = deserializeUser(messageBytes);
-
-                registerUser(user);
-                System.out.println(userRegistry.size());
                 socket.close();
+
             } catch (IOException | ClassNotFoundException e) {
                 System.out.println("Error handling client: " + e.getMessage());
 

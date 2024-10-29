@@ -40,35 +40,10 @@ import java.time.format.DateTimeFormatter;
  * Initializes services and provides a terminal-based interface for interaction.
  */
 public class SecureP2PMessagingApp extends Application {
-
-    static PublicKey publicKey;
-    static PrivateKey privateKey;
     User currentUser;
     P2PServer userServer;
 
-    P2PClient userClient;
-
     public static void main(String[] args) {
-
-        try {
-            KeyStore ks = KeyStore.getInstance("JKS");
-            try (InputStream keyStoreStream = new FileInputStream("keystore.jks")) {
-                ks.load(keyStoreStream, "psd2024".toCharArray());
-            }
-
-            // Load the private key from the keystore
-            Key key = ks.getKey("selfsigned", "psd2024".toCharArray());
-            if (key instanceof PrivateKey) {
-                privateKey = (PrivateKey) key;
-
-                // Load the corresponding public key from the certificate
-                java.security.cert.Certificate cert = ks.getCertificate("selfsigned");
-                publicKey = cert.getPublicKey();
-            }
-        } catch (KeyStoreException | NoSuchAlgorithmException | UnrecoverableKeyException | CertificateException |
-                 IOException e) {
-            e.printStackTrace();
-        }
 
         launch(args);
 
@@ -124,12 +99,10 @@ public class SecureP2PMessagingApp extends Application {
                 // Extract the username and port from input fields
                 String userName = usernameInput.getText();
                 int userPort = Integer.parseInt(portInput.getText());
-                String ipAddress = InetAddress.getByName("localhost").getHostAddress();
+                String ipAddress = InetAddress.getLocalHost().getHostAddress();
 
-                currentUser = new User(userName, publicKey, privateKey, ipAddress, userPort);
-
+                currentUser = new User(userName, ipAddress, userPort);
                 userServer = new P2PServer(currentUser, mainMenuLayout);
-                System.out.println("ola3");
 
                 Label userDetailsLabel = new Label("User: " + userName + ", IP = " + ipAddress + ":" + userPort);
                 userDetailsLabel.setTextFill(Color.DARKGRAY);
@@ -156,11 +129,9 @@ public class SecureP2PMessagingApp extends Application {
                 Scene mainMenuScene = new Scene(mainMenuLayout, 550, 400);
                 primaryStage.setScene(mainMenuScene);
 
-            } catch (RuntimeException ex) {
+            } catch (Exception ex) {
                 // Handle the error if the port is not a valid integer
-                portInput.setText("Enter a valid port number");
-            }catch (UnknownHostException ex) {
-                throw new RuntimeException(ex);
+                portInput.setPromptText("Enter a valid port number");
             }
         });
 
@@ -212,7 +183,7 @@ public class SecureP2PMessagingApp extends Application {
 
                 try {
                     if (!receiverName.isEmpty() && !messageContent.isEmpty()) {
-                        User receiver = new User(receiverName, publicKey, privateKey, contactIpInput.getText(),
+                        User receiver = new User(receiverName, contactIpInput.getText(),
                                 Integer.parseInt(contactPortInput.getText()));
 
                         // Create a new message
@@ -269,7 +240,7 @@ public class SecureP2PMessagingApp extends Application {
 
                     DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
                     String formattedTimestamp = conversation.getStartTime().format(formatter);
-                    String conversationLabel = (i + 1) + ". Conversation with " + participant.getUserName() +
+                    String conversationLabel = (i + 1) + ". Conversation with " + participant.getUserID() +
                             " (Started on " + formattedTimestamp + ")";
 
                     conversationComboBox.getItems().add(conversationLabel);
@@ -295,7 +266,7 @@ public class SecureP2PMessagingApp extends Application {
                         conversationLayout.setAlignment(Pos.CENTER);
                         conversationLayout.setStyle("-fx-background-color: #ffffff; -fx-padding: 20; -fx-border-color: #ccc; -fx-border-width: 1;");
 
-                        Label conversationHeader = new Label("--- Conversation with " + otherParticipant.getUserName() + " ---");
+                        Label conversationHeader = new Label("--- Conversation with " + otherParticipant.getUserID() + " ---");
                         conversationHeader.setStyle("-fx-font-size: 12; -fx-font-weight: bold; -fx-padding: 10;");
 
                         // Chat logs area
@@ -305,7 +276,7 @@ public class SecureP2PMessagingApp extends Application {
                         for (Message msg : selectedConvo.getMessages()) {
                             DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
                             String formattedTimestamp = msg.getTimestamp().format(formatter);
-                            String senderName = msg.getSender().equals(currentUser) ? "You" : otherParticipant.getUserName();
+                            String senderName = msg.getSender().equals(currentUser) ? "You" : otherParticipant.getUserID();
                             Label messageLabel = new Label(senderName + " [" + formattedTimestamp + "]: " + msg.getContent());
                             chatLogs.getChildren().add(messageLabel);
                         }
@@ -353,7 +324,7 @@ public class SecureP2PMessagingApp extends Application {
                                 // Optionally, scroll to the bottom of the chat log
                                 scrollPane.setVvalue(1.0); // This ensures the scroll pane moves to the latest message
                                 if (!success) {
-                                    Label statusLabel = new Label("Failed to send message to " + otherParticipant.getUserName());
+                                    Label statusLabel = new Label("Failed to send message to " + otherParticipant.getUserID());
                                     conversationLayout.getChildren().add(statusLabel);
                                 }
                             }

@@ -11,6 +11,8 @@ import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
 import java.security.UnrecoverableKeyException;
 import java.security.cert.CertificateException;
+import java.util.ArrayList;
+import java.util.List;
 
 public class P2PClient {
 
@@ -47,22 +49,15 @@ public class P2PClient {
 
             // Create an SSLSocketFactory from the SSLContext
             ssf = sslContext.getSocketFactory();
-        } catch (UnrecoverableKeyException e) {
-            throw new RuntimeException(e);
-        } catch (FileNotFoundException e) {
-            throw new RuntimeException(e);
-        } catch (CertificateException e) {
-            throw new RuntimeException(e);
-        } catch (NoSuchAlgorithmException e) {
-            throw new RuntimeException(e);
-        } catch (KeyStoreException e) {
-            throw new RuntimeException(e);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        } catch (KeyManagementException e) {
+
+            List<byte[]> uList = new ArrayList<>();
+            uList.add(serializeUser(user));
+            sendUserToCentralServer(uList);
+
+        } catch (Exception e) {
+            System.out.println("Error initializing P2PClient: " + e.getMessage());
             throw new RuntimeException(e);
         }
-        sendUserToCentralServer(serializeUser(user));
     }
 
     private byte[] serializeUser(User user) {
@@ -75,25 +70,38 @@ public class P2PClient {
         }
     }
 
-    private void sendUserToCentralServer(byte[] user)  {
+    private static User deserializeUser(byte[] data) throws IOException, ClassNotFoundException {
+        try (ByteArrayInputStream byteIn = new ByteArrayInputStream(data);
+             ObjectInputStream in = new ObjectInputStream(byteIn)) {
+            return (User) in.readObject();
+        }
+    }
+
+    private void sendUserToCentralServer(List<byte[]> users) {
         try {
             clientSocket = (SSLSocket) ssf.createSocket(InetAddress.getLocalHost(), 8888);
-            System.out.println("ola");
-            // Initialize DataOutputStream with the socket's output stream
+
             DataOutputStream dataOut = new DataOutputStream(clientSocket.getOutputStream());
-            System.out.println("AQUI" + user.length);
 
-            // Send the length of the message first
-            dataOut.writeInt(user.length);
+            // Send the number of users (1 user = registration, 2 users = retrieval request)
+            dataOut.writeInt(users.size());
 
-            // Send the serialized message to the connected peer
-            dataOut.write(user);
+            for (byte[] u : users) {
+                // Send the length of the serialized user data
+                dataOut.writeInt(u.length);
+                // Send the serialized user data
+                dataOut.write(u);
+            }
+
             dataOut.flush();
 
-        }catch (IOException e) {
-                throw new RuntimeException(e);
-            }
+
+        } catch (IOException e) {
+            System.out.println("Error sending user to central server: " + e.getMessage());
+            throw new RuntimeException(e);
+        }
     }
+
     public void sendMessage(User receiver, byte[] message) throws IOException {
         clientSocket = (SSLSocket) ssf.createSocket(receiver.getIpAddress(), receiver.getPort());
 
@@ -105,6 +113,7 @@ public class P2PClient {
         // Send the serialized message to the connected peer
         dataOut.write(message);
         dataOut.flush();
+
     }
 
 }
