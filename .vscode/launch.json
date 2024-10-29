@@ -6,6 +6,13 @@
     "configurations": [
         {
             "type": "java",
+            "name": "CentralServer",
+            "request": "launch",
+            "mainClass": "com.psd.CentralServer",
+            "projectName": "secure-p2p-app"
+        },
+        {
+            "type": "java",
             "name": "Current File",
             "request": "launch",
             "mainClass": "${file}"

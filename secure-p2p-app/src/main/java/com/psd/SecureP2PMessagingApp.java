@@ -28,6 +28,9 @@ import java.net.UnknownHostException;
 import java.security.*;
 import java.util.List;
 import java.util.Map;
+
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
+
 import java.util.HashMap;
 
 import java.io.FileInputStream;
@@ -41,37 +44,18 @@ import java.time.format.DateTimeFormatter;
  */
 public class SecureP2PMessagingApp extends Application {
 
-    static PublicKey publicKey;
-    static PrivateKey privateKey;
     User currentUser;
     P2PServer userServer;
 
     P2PClient userClient;
 
     public static void main(String[] args) {
-
-        try {
-            KeyStore ks = KeyStore.getInstance("JKS");
-            try (InputStream keyStoreStream = new FileInputStream("keystore.jks")) {
-                ks.load(keyStoreStream, "psd2024".toCharArray());
-            }
-
-            // Load the private key from the keystore
-            Key key = ks.getKey("selfsigned", "psd2024".toCharArray());
-            if (key instanceof PrivateKey) {
-                privateKey = (PrivateKey) key;
-
-                // Load the corresponding public key from the certificate
-                java.security.cert.Certificate cert = ks.getCertificate("selfsigned");
-                publicKey = cert.getPublicKey();
-            }
-        } catch (KeyStoreException | NoSuchAlgorithmException | UnrecoverableKeyException | CertificateException |
-                 IOException e) {
-            e.printStackTrace();
-        }
-
         launch(args);
+    }
 
+        static {
+        // Register the Bouncy Castle provider
+        Security.addProvider(new BouncyCastleProvider());
     }
 
     @Override
@@ -126,8 +110,7 @@ public class SecureP2PMessagingApp extends Application {
                 int userPort = Integer.parseInt(portInput.getText());
                 String ipAddress = InetAddress.getByName("localhost").getHostAddress();
 
-                currentUser = new User(userName, publicKey, privateKey, ipAddress, userPort);
-
+                currentUser = new User(userName, ipAddress, userPort);
                 userServer = new P2PServer(currentUser, mainMenuLayout);
                 System.out.println("ola3");
 
@@ -158,7 +141,7 @@ public class SecureP2PMessagingApp extends Application {
 
             } catch (RuntimeException ex) {
                 // Handle the error if the port is not a valid integer
-                portInput.setText("Enter a valid port number");
+                System.out.println(ex.getMessage());
             }catch (UnknownHostException ex) {
                 throw new RuntimeException(ex);
             }
@@ -212,7 +195,7 @@ public class SecureP2PMessagingApp extends Application {
 
                 try {
                     if (!receiverName.isEmpty() && !messageContent.isEmpty()) {
-                        User receiver = new User(receiverName, publicKey, privateKey, contactIpInput.getText(),
+                        User receiver = new User(receiverName, contactIpInput.getText(),
                                 Integer.parseInt(contactPortInput.getText()));
 
                         // Create a new message

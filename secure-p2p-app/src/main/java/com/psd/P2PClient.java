@@ -1,70 +1,71 @@
 package com.psd;
 
 import com.psd.entities.User;
+import com.psd.services.EncriptionService;
 
 import javax.net.ssl.*;
+
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
+
 import java.io.*;
 import java.net.InetAddress;
 import java.security.KeyManagementException;
+import java.security.KeyPair;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
+import java.security.Security;
 import java.security.UnrecoverableKeyException;
 import java.security.cert.CertificateException;
+import java.security.cert.X509Certificate;
 
 public class P2PClient {
 
     private SSLSocket clientSocket;
-    private SSLSocketFactory ssf;
+    private SSLSocketFactory sslSocketFactory;
+
+    static {
+        // Register the Bouncy Castle provider
+        Security.addProvider(new BouncyCastleProvider());
+    }
 
     public P2PClient(User user) {
-        try {
-            // Setup SSL context with the keystore and truststore
-            SSLContext sslContext = SSLContext.getInstance("TLS");
-            KeyManagerFactory kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
-            KeyStore ks = KeyStore.getInstance("JKS");
-
-            // Load the keystore (adjust the path to your keystore)
-            try (InputStream keyStoreStream = new FileInputStream("keystore.jks")) {
-                ks.load(keyStoreStream, "psd2024".toCharArray());
-            }
-
-            // Initialize KeyManagerFactory with the keystore
-            kmf.init(ks, "psd2024".toCharArray());
-
-            // Load the truststore
-            KeyStore trustStore = KeyStore.getInstance("JKS");
-            try (InputStream trustStoreStream = new FileInputStream("truststore.jks")) {
-                trustStore.load(trustStoreStream, "psd2024".toCharArray());
-            }
-
-            // Initialize TrustManagerFactory with the truststore
-            TrustManagerFactory tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
-            tmf.init(trustStore);
-
-            // Initialize the SSLContext with both key managers and trust managers
-            sslContext.init(kmf.getKeyManagers(), tmf.getTrustManagers(), null);
-
-            // Create an SSLSocketFactory from the SSLContext
-            ssf = sslContext.getSocketFactory();
-        } catch (UnrecoverableKeyException e) {
-            throw new RuntimeException(e);
-        } catch (FileNotFoundException e) {
-            throw new RuntimeException(e);
-        } catch (CertificateException e) {
-            throw new RuntimeException(e);
-        } catch (NoSuchAlgorithmException e) {
-            throw new RuntimeException(e);
-        } catch (KeyStoreException e) {
-            throw new RuntimeException(e);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        } catch (KeyManagementException e) {
-            throw new RuntimeException(e);
+        sslSocketFactory = createSSLSocketFactory(user); // Initialize SSL context when client is created
+        if (sslSocketFactory == null) {
+            System.out.println("Failed to create SSL peer client socket factory.");
+            return;
         }
         sendUserToCentralServer(serializeUser(user));
     }
 
+    private static SSLSocketFactory createSSLSocketFactory(User user) {
+        try {
+            SSLContext sslContext = SSLContext.getInstance("TLS");
+            KeyManagerFactory kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
+            KeyStore ks = KeyStore.getInstance("JKS");
+
+            try (InputStream keyStoreStream = new FileInputStream(EncriptionService.getStoreDirectory() + user.getUserName() + "-keystore.jks")) {
+                ks.load(keyStoreStream, "centralServer".toCharArray());
+            }
+            kmf.init(ks, "centralServer".toCharArray());
+
+            KeyStore trustStore = KeyStore.getInstance("JKS");
+            try (InputStream trustStoreStream = new FileInputStream(EncriptionService.getStoreDirectory() + "server-truststore.jks")) {
+                trustStore.load(trustStoreStream, "centralServer".toCharArray());
+            }
+
+            TrustManagerFactory tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+            tmf.init(trustStore);
+
+            sslContext.init(kmf.getKeyManagers(), tmf.getTrustManagers(), null);
+            return sslContext.getSocketFactory();
+
+        } catch (Exception e) {
+            System.out.println("Error creating SSL context: " + e.getMessage());
+            return null;
+        }
+    }
+    
     private byte[] serializeUser(User user) {
         try (ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
              ObjectOutputStream out = new ObjectOutputStream(byteOut)) {
@@ -77,7 +78,7 @@ public class P2PClient {
 
     private void sendUserToCentralServer(byte[] user)  {
         try {
-            clientSocket = (SSLSocket) ssf.createSocket(InetAddress.getLocalHost(), 8888);
+            clientSocket = (SSLSocket) sslSocketFactory.createSocket(InetAddress.getLocalHost(), 8888);
             System.out.println("ola");
             // Initialize DataOutputStream with the socket's output stream
             DataOutputStream dataOut = new DataOutputStream(clientSocket.getOutputStream());
@@ -94,8 +95,9 @@ public class P2PClient {
                 throw new RuntimeException(e);
             }
     }
+
     public void sendMessage(User receiver, byte[] message) throws IOException {
-        clientSocket = (SSLSocket) ssf.createSocket(receiver.getIpAddress(), receiver.getPort());
+        clientSocket = (SSLSocket) sslSocketFactory.createSocket(receiver.getIpAddress(), receiver.getPort());
 
         // Initialize DataOutputStream with the socket's output stream
         DataOutputStream dataOut = new DataOutputStream(clientSocket.getOutputStream());

@@ -2,6 +2,8 @@ package com.psd;
 
 import com.psd.entities.Conversation;
 import com.psd.entities.User;
+import com.psd.services.EncriptionService;
+
 import javafx.application.Platform;
 import javafx.scene.control.Label;
 import javafx.scene.layout.StackPane;
@@ -9,18 +11,21 @@ import javafx.scene.layout.BorderPane;
 
 import javax.net.ssl.*;
 
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
+
 import com.psd.entities.Message;
 
 import java.io.*;
 import java.net.InetAddress;
-import java.net.ServerSocket;
-import java.net.Socket;
 import java.security.KeyManagementException;
+import java.security.KeyPair;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
+import java.security.Security;
 import java.security.UnrecoverableKeyException;
 import java.security.cert.CertificateException;
+import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -32,27 +37,32 @@ import java.util.Map;
  */
 public class P2PServer {
 
-    private User user;
+    private static User user;
     private int port;  // The port on which the server listens
     private SSLServerSocket serverSocket;
     private volatile boolean running = true; // Will be modified by different threads
     private BorderPane mainMenuLayout;  // Reference to the main layout in the JavaFX UI
     private static Map<String, Conversation> conversations;
     private P2PClient client;
+    private SSLServerSocketFactory sslServerSocketFactory;
 
-    public P2PServer(User user, BorderPane mainMenuLayout) {
-        this.user = user;
-        this.port = user.getPort();
-        this.mainMenuLayout = mainMenuLayout;  // Initialize the layout reference
-        this.conversations = new HashMap<>();
-        System.out.println("ola");
-        this.client = new P2PClient(user);
-
-        new Thread(() -> {
-            start();  // This will listen in the background
-        }).start();
+    static {
+        // Register the Bouncy Castle provider
+        Security.addProvider(new BouncyCastleProvider());
     }
 
+    public P2PServer(User user, BorderPane mainMenuLayout) {
+        P2PServer.user = user;
+        this.port = user.getPort();
+        this.mainMenuLayout = mainMenuLayout;
+        this.conversations = new HashMap<>();
+        System.out.println("ola");
+
+        initializeServerKeys(); // Generate keys and import certificates
+        initializeSSLContext(); // Load SSL context with the latest truststore
+
+        new Thread(this::start).start();
+    }
 
     /**
      * Starts the server to listen for incoming messages on the specified port.
@@ -65,47 +75,68 @@ public class P2PServer {
      */
     public void start() {
         try {
-            // Setup SSL context with the keystore and truststore
+            if (sslServerSocketFactory == null) {
+                System.out.println("Failed to create SSL peer server socket factory.");
+                return;
+            }
+
+            serverSocket = (SSLServerSocket) sslServerSocketFactory.createServerSocket(port, 50, InetAddress.getByName(user.getIpAddress()));
+            System.out.println("P2PServer: Created socket with this data: " + serverSocket.getInetAddress().getHostAddress() + ":" + serverSocket.getLocalPort());
+
+            this.client = new P2PClient(user); // Initialize client to send messages
+
+            while (running) {
+                SSLSocket socket = (SSLSocket) serverSocket.accept(); // Accept incoming connection
+                new Thread(new ClientHandler(socket, mainMenuLayout)).start(); // Handle each client in a new thread
+            }
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private void initializeServerKeys() {
+        try {
+            KeyPair keyPair = EncriptionService.generateKeyPair();
+            X509Certificate cert = EncriptionService.generateSelfSignedCertificate(keyPair);
+
+            // Save peer's keystore with its own key pair and certificate
+            EncriptionService.saveKeyStore(keyPair, cert, user.getUserName());
+
+            // Import peer certificate into server's truststore
+            EncriptionService.importCertToTruststore(cert, "server-truststore.jks", user.getUserName());
+
+            // Reload SSL context to include the newly imported certificate
+            initializeSSLContext();
+
+        } catch (Exception e) {
+            System.out.println("Error generating keys or importing to truststore: " + e.getMessage());
+        }
+    }
+
+    private void initializeSSLContext() {
+        try {
             SSLContext sslContext = SSLContext.getInstance("TLS");
             KeyManagerFactory kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
             KeyStore ks = KeyStore.getInstance("JKS");
 
-            // Load the keystore
-            try (InputStream keyStoreStream = new FileInputStream("keystore.jks")) {
-                ks.load(keyStoreStream, "psd2024".toCharArray());  // Use your keystore password
+            try (InputStream keyStoreStream = new FileInputStream(EncriptionService.getStoreDirectory() + user.getUserName() + "-keystore.jks")) {
+                ks.load(keyStoreStream, "centralServer".toCharArray());
             }
+            kmf.init(ks, "centralServer".toCharArray());
 
-            kmf.init(ks, "psd2024".toCharArray());  // Initialize KeyManager with keystore password
-
-            // Load the truststore
             KeyStore trustStore = KeyStore.getInstance("JKS");
-            try (InputStream trustStoreStream = new FileInputStream("truststore.jks")) {
-                trustStore.load(trustStoreStream, "psd2024".toCharArray());
+            try (InputStream trustStoreStream = new FileInputStream(EncriptionService.getStoreDirectory() + "server-truststore.jks")) {
+                trustStore.load(trustStoreStream, "centralServer".toCharArray());
             }
 
-            // Initialize TrustManagerFactory with the truststore
             TrustManagerFactory tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
             tmf.init(trustStore);
 
-            // Initialize the SSLContext with both key managers and trust managers
             sslContext.init(kmf.getKeyManagers(), tmf.getTrustManagers(), null);
+            sslServerSocketFactory = sslContext.getServerSocketFactory();
 
-            // Create SSLServerSocket
-            SSLServerSocketFactory ssf = sslContext.getServerSocketFactory();
-            serverSocket = (SSLServerSocket) ssf.createServerSocket(port, 50, InetAddress.getByName(user.getIpAddress()));
-
-            System.out.println("P2PServer: Created socket with this data: " + serverSocket.getInetAddress().getHostAddress() +
-                    ":" + serverSocket.getLocalPort());
-
-            // Continuously listen for incoming connections
-            while (running) {
-                SSLSocket socket = (SSLSocket) serverSocket.accept();  // Accept incoming connection
-                new Thread(new ClientHandler(socket, mainMenuLayout)).start();  // Handle each client in a new thread
-            }
-
-        } catch (UnrecoverableKeyException | IOException | NoSuchAlgorithmException | CertificateException |
-                 KeyStoreException | KeyManagementException e) {
-            throw new RuntimeException(e);
+        } catch (Exception e) {
+            System.out.println("Error creating server SSL context: " + e.getMessage());
         }
     }
 
