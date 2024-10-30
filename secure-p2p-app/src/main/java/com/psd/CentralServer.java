@@ -66,7 +66,6 @@ public class CentralServer {
         }
     }
     public static void sendUser(User toSend, User requestedUser) throws IOException {
-        System.out.println(toSend.getIpAddress() + " " + toSend.getPort());
         SSLSocket clientSocket = (SSLSocket) ssf.createSocket(toSend.getIpAddress(), toSend.getPort());
 
         // Initialize DataOutputStream with the socket's output stream
@@ -161,16 +160,16 @@ public class CentralServer {
                     // Deserialize the message
                     users.add(deserializeUser(messageBytes));
 
-                    if(nrUsers == 1) {
-                        // If only one user is sent, it's a registration request
-                        registerUser(users.get(0));
-                        sendUser(users.get(0), users.get(0));
-                    }
-                    else{
-                        // If multiple users are sent, assume it's a request to retrieve a user
-                        sendUser(users.get(0), getUser(users.get(1).getUserID()));
-                    }
                 }
+                if(nrUsers == 1) {
+                    // If only one user is sent, it's a registration request
+                    registerUser(users.get(0));
+                }
+                else{
+                    // If multiple users are sent, assume it's a request to retrieve a user
+                    sendUser(users.get(0), getUser(users.get(1).getUserID()));
+                }
+
                 socket.close();
 
             } catch (IOException | ClassNotFoundException e) {

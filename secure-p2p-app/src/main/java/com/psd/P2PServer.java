@@ -33,6 +33,8 @@ import java.util.Map;
 public class P2PServer {
 
     private User user;
+    private static User userAux;
+    private static final Object userAuxLock = new Object();
     private int port;  // The port on which the server listens
     private SSLServerSocket serverSocket;
     private volatile boolean running = true; // Will be modified by different threads
@@ -46,7 +48,6 @@ public class P2PServer {
         this.mainMenuLayout = mainMenuLayout;  // Initialize the layout reference
         this.conversations = new HashMap<>();
         this.client = new P2PClient(user);
-
         new Thread(() -> {
             start();  // This will listen in the background
         }).start();
@@ -116,6 +117,19 @@ public class P2PServer {
             Conversation conversation = conversations.get(conversationKey);
 
             if (conversation == null) {
+                List<byte[]> uList = new ArrayList<>();
+                uList.add(serializeMessage(sender));
+                uList.add(serializeMessage(receiver));
+                client.sendUserToCentralServer(uList);
+                // Sincronizar o acesso para aguardar a atualização de userAux
+                synchronized (userAuxLock) {
+                    // Verificar se o userAux está atualizado
+                    if (receiver.getIpAddress() == null || receiver.getPort() == 0) {
+                        System.out.println("Aguardando atualização de userAux com IP e Porta...");
+                        userAuxLock.wait(); // Espera até ser notificado
+                        receiver = userAux;
+                    }
+                }
                 // Create a new conversation if one does not exist
                 conversation = new Conversation(sender, receiver);
                 conversations.put(conversationKey, conversation);
@@ -129,18 +143,19 @@ public class P2PServer {
             byte[] serializedMessage = serializeMessage(message);
 
             System.out.println("P2PClient: Send message to " + receiver.getIpAddress() + ":" + receiver.getPort());
-
             // Send the actual serialized message
             client.sendMessage(receiver, serializedMessage);
 
             return true;
         } catch (IOException e) {
             return false;
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
         }
     }
 
 
-    private byte[] serializeMessage(Message message) throws IOException {
+    private byte[] serializeMessage(Object message) throws IOException {
         try (ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
              ObjectOutputStream out = new ObjectOutputStream(byteOut)) {
             out.writeObject(message);
@@ -148,10 +163,10 @@ public class P2PServer {
         }
     }
 
-    private static Message deserializeMessage(byte[] data) throws IOException, ClassNotFoundException {
+    private static Object deserializeMessage(byte[] data) throws IOException, ClassNotFoundException {
         try (ByteArrayInputStream byteIn = new ByteArrayInputStream(data);
              ObjectInputStream in = new ObjectInputStream(byteIn)) {
-            return (Message) in.readObject();
+            return in.readObject();
         }
     }
 
@@ -220,39 +235,51 @@ public class P2PServer {
                     totalBytesRead += bytesRead;
                 }
 
-                // Deserialize the message
-                Message message = deserializeMessage(messageBytes);
+                if(deserializeMessage(messageBytes) instanceof Message) {
+                    // Deserialize the message
+                    Message message = (Message) deserializeMessage(messageBytes);
 
-                System.out.println("Clienthandler: Received message from " + message.getSender().getIpAddress() + ":" + message.getSender().getPort() );
+                    System.out.println("Clienthandler: Received message from " + message.getSender().getIpAddress() + ":" + message.getSender().getPort());
 
-                // Check if conversation exists between sender and receiver
-                String conversationKey = getConversationKey(message.getSender(), message.getReceiver());
-                Conversation conversation = conversations.get(conversationKey);
+                    // Check if conversation exists between sender and receiver
+                    String conversationKey = getConversationKey(message.getSender(), message.getReceiver());
+                    Conversation conversation = conversations.get(conversationKey);
 
-                if (conversation == null) {
-                    // Create a new conversation if one does not exist
-                    conversation = new Conversation(message.getSender(), message.getReceiver());
-                    conversations.put(conversationKey, conversation);
-                    System.out.println("New conversation created between " + message.getSender().getUserID() + " and " + message.getReceiver().getUserID());
+                    if (conversation == null) {
+                        // Create a new conversation if one does not exist
+                        conversation = new Conversation(message.getSender(), message.getReceiver());
+                        conversations.put(conversationKey, conversation);
+                        System.out.println("New conversation created between " + message.getSender().getUserID() + " and " + message.getReceiver().getUserID());
+                    }
+
+                    // Add the message to the conversation
+                    conversation.addMessage(message);
+
+                    // Update the JavaFX UI on the JavaFX Application Thread
+                    Platform.runLater(() -> {
+                        // Create a new label with the received message
+                        Label messageLabel = new Label("Received message from: " + message.getSender().getUserID());
+
+                        // Set this label to the center of the mainMenuLayout
+                        StackPane messagePane = new StackPane(messageLabel);
+                        mainMenuLayout.setCenter(messagePane);  // Update the center with the received message
+                    });
+                }
+                else{
+                    synchronized (userAuxLock) {
+                        userAux = (User) deserializeMessage(messageBytes);
+                        System.out.println("ClientHandler: userAux atualizado para " + userAux);
+                        userAuxLock.notifyAll(); // Notifica o sendDirectMessage
+                    }
+
+
                 }
 
-                // Add the message to the conversation
-                conversation.addMessage(message);
-
-                // Update the JavaFX UI on the JavaFX Application Thread
-                Platform.runLater(() -> {
-                    // Create a new label with the received message
-                    Label messageLabel = new Label("Received message from: " + message.getSender().getUserID());
-
-                    // Set this label to the center of the mainMenuLayout
-                    StackPane messagePane = new StackPane(messageLabel);
-                    mainMenuLayout.setCenter(messagePane);  // Update the center with the received message
-                });
 
                 socket.close();  // Close the connection after the message is received
 
             } catch (IOException | ClassNotFoundException e) {
-                e.printStackTrace();
+                System.out.println(e.getMessage());
             }
         }
 

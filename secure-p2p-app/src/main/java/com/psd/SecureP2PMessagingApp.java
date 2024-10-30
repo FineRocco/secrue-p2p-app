@@ -143,7 +143,7 @@ public class SecureP2PMessagingApp extends Application {
             TextField contactUsernameInput = new TextField();
             contactUsernameInput.setPromptText("Enter the receiver's username");
 
-            Label contactIpLabel = new Label("IP address:");
+            /*Label contactIpLabel = new Label("IP address:");
             contactIpLabel.setTextFill(Color.BLACK);
             TextField contactIpInput = new TextField();
             contactIpInput.setPromptText("Enter the receiver's IP address");
@@ -152,7 +152,7 @@ public class SecureP2PMessagingApp extends Application {
             contactPortLabel.setTextFill(Color.BLACK);
             TextField contactPortInput = new TextField();
             contactPortInput.setPromptText("Enter the receiver's port");
-
+            */
             Label messageLabel = new Label("Message:");
             messageLabel.setTextFill(Color.BLACK);
             TextArea messageInput = new TextArea();
@@ -168,8 +168,8 @@ public class SecureP2PMessagingApp extends Application {
             sendDirectMessageLayout.setStyle("-fx-background-color: #f5f5f5; -fx-padding: 10;");
             sendDirectMessageLayout.getChildren().addAll(
                     contactUsernameLabel, contactUsernameInput,
-                    contactIpLabel, contactIpInput,
-                    contactPortLabel, contactPortInput,
+                    //contactIpLabel, contactIpInput,
+                    //contactPortLabel, contactPortInput,
                     messageLabel, messageInput, sendButton
             );
 
@@ -183,8 +183,7 @@ public class SecureP2PMessagingApp extends Application {
 
                 try {
                     if (!receiverName.isEmpty() && !messageContent.isEmpty()) {
-                        User receiver = new User(receiverName, contactIpInput.getText(),
-                                Integer.parseInt(contactPortInput.getText()));
+                        User receiver = new User(receiverName, null, 0);
 
                         // Create a new message
                         Message message = new Message("1", currentUser, receiver, messageContent);
@@ -204,7 +203,7 @@ public class SecureP2PMessagingApp extends Application {
                         }
                     }
                 } catch (NumberFormatException ex) {
-                    contactPortInput.setPromptText("Enter a valid port number");
+                    //contactPortInput.setPromptText("Enter a valid port number");
                 }
             });
         });

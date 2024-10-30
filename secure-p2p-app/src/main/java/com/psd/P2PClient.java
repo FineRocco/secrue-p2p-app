@@ -77,7 +77,7 @@ public class P2PClient {
         }
     }
 
-    private void sendUserToCentralServer(List<byte[]> users) {
+    public void sendUserToCentralServer(List<byte[]> users) {
         try {
             clientSocket = (SSLSocket) ssf.createSocket(InetAddress.getLocalHost(), 8888);
 
