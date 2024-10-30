@@ -65,6 +65,19 @@ public class P2PClient {
             return null;
         }
     }
+
+    public void sendMessage(User receiver, byte[] message) throws IOException {
+        clientSocket = (SSLSocket) sslSocketFactory.createSocket(receiver.getIpAddress(), receiver.getPort());
+
+        // Initialize DataOutputStream with the socket's output stream
+        DataOutputStream dataOut = new DataOutputStream(clientSocket.getOutputStream());
+        // Send the length of the message first
+        dataOut.writeInt(message.length);
+
+        // Send the serialized message to the connected peer
+        dataOut.write(message);
+        dataOut.flush();
+    }
     
     private byte[] serializeUser(User user) {
         try (ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
@@ -94,19 +107,6 @@ public class P2PClient {
         }catch (IOException e) {
                 throw new RuntimeException(e);
             }
-    }
-
-    public void sendMessage(User receiver, byte[] message) throws IOException {
-        clientSocket = (SSLSocket) sslSocketFactory.createSocket(receiver.getIpAddress(), receiver.getPort());
-
-        // Initialize DataOutputStream with the socket's output stream
-        DataOutputStream dataOut = new DataOutputStream(clientSocket.getOutputStream());
-        // Send the length of the message first
-        dataOut.writeInt(message.length);
-
-        // Send the serialized message to the connected peer
-        dataOut.write(message);
-        dataOut.flush();
     }
 
 }

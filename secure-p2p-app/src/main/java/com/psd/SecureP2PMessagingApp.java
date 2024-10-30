@@ -48,9 +48,14 @@ public class SecureP2PMessagingApp extends Application {
     P2PServer userServer;
 
     P2PClient userClient;
+    
+    static void enableSSLDebugUsingSystemProperties() {
+        System.setProperty("javax.net.debug", "ssl");
+    }
 
     public static void main(String[] args) {
         launch(args);
+        
     }
 
         static {

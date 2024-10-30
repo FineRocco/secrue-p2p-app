@@ -61,9 +61,11 @@ public class EncriptionService {
         // Store the private key and the certificate in the keystore
         keyStore.setKeyEntry(peerId, keyPair.getPrivate(), "centralServer".toCharArray(), new Certificate[]{cert});
     
-        // Save the keystore to file
+        // Save the keystore to file with a flush to ensure immediate update
         try (FileOutputStream fos = new FileOutputStream(STORE_DIRECTORY + peerId + "-keystore.jks")) {
             keyStore.store(fos, "centralServer".toCharArray());
+            fos.flush(); // Force write to disk
+            System.out.println("Keystore saved successfully for " + peerId);
         }
     }
 
@@ -72,12 +74,15 @@ public class EncriptionService {
         try (FileInputStream fis = new FileInputStream(STORE_DIRECTORY + truststoreName)) {
             truststore.load(fis, "centralServer".toCharArray());
         }
-
+    
         // Add certificate to truststore
         truststore.setCertificateEntry(peer, cert);
-
+    
+        // Save the truststore to file with a flush to ensure immediate update
         try (FileOutputStream fos = new FileOutputStream(STORE_DIRECTORY + truststoreName)) {
             truststore.store(fos, "centralServer".toCharArray());
+            fos.flush(); // Force write to disk
+            System.out.println("Truststore updated successfully with " + peer + " certificate.");
         }
     }
 

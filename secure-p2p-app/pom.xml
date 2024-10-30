@@ -39,18 +39,26 @@
 
     <build>
         <plugins>
-            <!-- JavaFX Maven Plugin -->
             <plugin>
-                <groupId>org.openjfx</groupId>
-                <artifactId>javafx-maven-plugin</artifactId>
-                <version>0.0.8</version>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.0.0</version>
                 <configuration>
                     <mainClass>com.psd.SecureP2PMessagingApp</mainClass>
-                    <modulePath>--module-path</modulePath>
-                    <addModules>javafx.controls,javafx.fxml</addModules>
+                    <arguments>
+                        <argument>-Djavax.net.debug=ssl</argument>
+                        <argument>--module-path</argument>
+                        <argument>${C:\Program Files\Java\javafx-sdk-23\bin}</argument> <!-- replace with the path to your JavaFX library -->
+                        <argument>--add-modules</argument>
+                        <argument>javafx.controls,javafx.fxml</argument>
+                        <argument>-classpath</argument>
+                        <argument>${project.build.outputDirectory}</argument>
+                        <argument>com.psd.SecureP2PMessagingApp</argument>
+                    </arguments>
                 </configuration>
             </plugin>
         </plugins>
     </build>
+
 
 </project>

@@ -61,7 +61,9 @@ public class P2PServer {
         initializeServerKeys(); // Generate keys and import certificates
         initializeSSLContext(); // Load SSL context with the latest truststore
 
-        new Thread(this::start).start();
+        new Thread(() -> {
+            start();  // This will listen in the background
+        }).start();
     }
 
     /**
