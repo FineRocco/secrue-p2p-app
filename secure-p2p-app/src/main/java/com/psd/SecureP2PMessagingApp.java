@@ -18,19 +18,33 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
+
+import java.util.HashMap;
+
+import java.io.FileInputStream;
+import java.io.InputStream;
+import java.security.cert.CertificateException;
+import java.time.format.DateTimeFormatter;
+
 /**
  * Main class for the Secure P2P Messaging Application.
  * Initializes services and provides a terminal-based interface for interaction.
  */
 public class SecureP2PMessagingApp extends Application {
+
     User currentUser;
     P2PServer userServer;
+    static {
+        // Register the Bouncy Castle provider
+        Security.addProvider(new BouncyCastleProvider());
+    }
 
     public static void main(String[] args) {
 
         launch(args);
-
     }
+
 
     @Override
     public void start(Stage primaryStage) {

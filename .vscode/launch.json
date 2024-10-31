@@ -1,21 +1,28 @@
 {
-  // Use IntelliSense to learn about possible attributes.
-  // Hover to view descriptions of existing attributes.
-  // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
-  "version": "0.2.0",
-  "configurations": [
-    {
-      "type": "java",
-      "name": "Current File",
-      "request": "launch",
-      "mainClass": "${file}"
-    },
-    {
-      "type": "java",
-      "name": "SecureP2PMessagingApp",
-      "request": "launch",
-      "mainClass": "com.psd.SecureP2PMessagingApp",
-      "projectName": "secure-p2p-app"
-    }
-  ]
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "java",
+            "name": "CentralServer",
+            "request": "launch",
+            "mainClass": "com.psd.CentralServer",
+            "projectName": "secure-p2p-app"
+        },
+        {
+            "type": "java",
+            "name": "Current File",
+            "request": "launch",
+            "mainClass": "${file}"
+        },
+        {
+            "type": "java",
+            "name": "SecureP2PMessagingApp",
+            "request": "launch",
+            "mainClass": "com.psd.SecureP2PMessagingApp",
+            "projectName": "secure-p2p-app"
+        }
+    ]
 }

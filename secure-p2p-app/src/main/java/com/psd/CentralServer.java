@@ -1,13 +1,21 @@
 package com.psd;
 
+import com.psd.entities.Message;
 import com.psd.entities.User;
+import com.psd.services.EncriptionService;
 
 import javax.net.ssl.*;
+
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
+
 import java.io.*;
 import java.net.InetAddress;
+import java.security.KeyPair;
 import java.security.KeyStore;
 import java.util.ArrayList;
 import java.util.List;
+import java.security.Security;
+import java.security.cert.X509Certificate;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class CentralServer {
@@ -16,8 +24,16 @@ public class CentralServer {
     private static volatile boolean isRunning = false;
     private static SSLSocketFactory sslSocketFactory;
 
+        static {
+        // Register the Bouncy Castle provider
+        Security.addProvider(new BouncyCastleProvider());
+    }
+
     public static void main(String[] args) {
         // Load SSL context
+        initializeServerKeys();
+        initializeServerTruststore();
+
         SSLServerSocketFactory sslServerSocketFactory = createSSLServerSocketFactory();
         if (sslServerSocketFactory == null) {
             System.out.println("Failed to create SSL server socket factory.");
@@ -45,6 +61,35 @@ public class CentralServer {
             }
         }).start();
     }
+
+    private static void initializeServerKeys() {
+        try {
+            KeyPair keyPair = EncriptionService.generateKeyPair();
+            X509Certificate cert = EncriptionService.generateSelfSignedCertificate(keyPair);
+            EncriptionService.saveKeyStore(keyPair, cert, "server"); // Generates 'server-keystore.jks'
+        } catch (Exception e) {
+            System.out.println("Error generating server keys and certificate: " + e.getMessage());
+        }
+    }
+
+    public static void initializeServerTruststore() {
+        try {
+            // Load the server keystore
+            KeyStore keyStore = KeyStore.getInstance("JKS");
+            try (FileInputStream keyStoreStream = new FileInputStream(EncriptionService.getStoreDirectory() + "server-keystore.jks")) {
+                keyStore.load(keyStoreStream, "centralServer".toCharArray());
+            }
+
+            // Retrieve the server certificate
+            X509Certificate serverCert = (X509Certificate) keyStore.getCertificate("server");
+
+            // Create the truststore and add the server certificate
+            EncriptionService.createServerTrustStore(serverCert); // Creates server-truststore.jks
+        } catch (Exception e) {
+            System.out.println("Error generating server truststore: " + e.getMessage());
+        }
+    }
+
 
     /**
      * Registers a new user to the central server.
@@ -118,25 +163,21 @@ public class CentralServer {
             KeyManagerFactory kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
             KeyStore ks = KeyStore.getInstance("JKS");
 
-            // Load the keystore (adjust the path to your keystore)
-            try (InputStream keyStoreStream = new FileInputStream("serverkeystore.jks")) {
+            // Load server keystore created by EncriptionService
+            try (InputStream keyStoreStream = new FileInputStream(EncriptionService.getStoreDirectory() + "server-keystore.jks")) {
                 ks.load(keyStoreStream, "centralServer".toCharArray());
             }
 
-            // Initialize KeyManagerFactory with the keystore
             kmf.init(ks, "centralServer".toCharArray());
 
-            // Load the truststore
             KeyStore trustStore = KeyStore.getInstance("JKS");
-            try (InputStream trustStoreStream = new FileInputStream("servertruststore.jks")) {
+            try (InputStream trustStoreStream = new FileInputStream(EncriptionService.getStoreDirectory() + "server-truststore.jks")) {
                 trustStore.load(trustStoreStream, "centralServer".toCharArray());
             }
 
-            // Initialize TrustManagerFactory with the truststore
             TrustManagerFactory tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
             tmf.init(trustStore);
 
-            // Initialize the SSLContext with both key managers and trust managers
             sslContext.init(kmf.getKeyManagers(), tmf.getTrustManagers(), null);
 
             sslSocketFactory = sslContext.getSocketFactory();

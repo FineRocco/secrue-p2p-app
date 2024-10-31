@@ -1,18 +1,35 @@
 package com.psd;
 
 import com.psd.entities.User;
+import com.psd.services.EncriptionService;
 
 import javax.net.ssl.*;
+
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
+
 import java.io.*;
 import java.net.InetAddress;
+import java.security.KeyManagementException;
+import java.security.KeyPair;
 import java.security.KeyStore;
 import java.util.ArrayList;
 import java.util.List;
+import java.security.KeyStoreException;
+import java.security.NoSuchAlgorithmException;
+import java.security.Security;
+import java.security.UnrecoverableKeyException;
+import java.security.cert.CertificateException;
+import java.security.cert.X509Certificate;
 
 public class P2PClient {
 
     private final SSLSocketFactory sslSocketFactory;
     private SSLSocket clientSocket;
+
+    static {
+        // Register the Bouncy Castle provider
+        Security.addProvider(new BouncyCastleProvider());
+    }
 
     /**
      * Initializes the P2PClient by setting up an SSL context, creating an SSLSocketFactory, and sending the user data to the central server.
@@ -20,46 +37,42 @@ public class P2PClient {
      * @param user The User object to be serialized and sent to the central server.
      */
     public P2PClient(User user) {
+        sslSocketFactory = createSSLSocketFactory(user); // Initialize SSL context when client is created
+        if (sslSocketFactory == null) {
+            System.out.println("Failed to create SSL peer client socket factory.");
+            return;
+        }
+        sendUserToCentralServer(serializeUser(user));
+    }
+
+    private static SSLSocketFactory createSSLSocketFactory(User user) {
         try {
-            // Set up SSL context for secure communication
             SSLContext sslContext = SSLContext.getInstance("TLS");
-            KeyManagerFactory keyManagerFactory = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
-            KeyStore keyStore = KeyStore.getInstance("JKS");
+            KeyManagerFactory kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
+            KeyStore ks = KeyStore.getInstance("JKS");
 
-            // Load the keystore from file
-            try (InputStream keyStoreStream = new FileInputStream("keystore.jks")) {
-                keyStore.load(keyStoreStream, "psd2024".toCharArray());
+            try (InputStream keyStoreStream = new FileInputStream(EncriptionService.getStoreDirectory() + user.getUserName() + "-keystore.jks")) {
+                ks.load(keyStoreStream, "centralServer".toCharArray());
             }
+            kmf.init(ks, "centralServer".toCharArray());
 
-            // Initialize KeyManager with keystore
-            keyManagerFactory.init(keyStore, "psd2024".toCharArray());
-
-            // Load and initialize truststore
             KeyStore trustStore = KeyStore.getInstance("JKS");
-            try (InputStream trustStoreStream = new FileInputStream("truststore.jks")) {
-                trustStore.load(trustStoreStream, "psd2024".toCharArray());
+            try (InputStream trustStoreStream = new FileInputStream(EncriptionService.getStoreDirectory() + "server-truststore.jks")) {
+                trustStore.load(trustStoreStream, "centralServer".toCharArray());
             }
 
-            TrustManagerFactory trustManagerFactory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
-            trustManagerFactory.init(trustStore);
+            TrustManagerFactory tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+            tmf.init(trustStore);
 
-            // Configure SSLContext with key and trust managers
-            sslContext.init(keyManagerFactory.getKeyManagers(), trustManagerFactory.getTrustManagers(), null);
-
-            // Create SSLSocketFactory from SSLContext
-            sslSocketFactory = sslContext.getSocketFactory();
-
-            // Serialize the user object and send it to the central server
-            List<byte[]> serializedUsers = new ArrayList<>();
-            serializedUsers.add(serializeUser(user));
-            sendUserToCentralServer(serializedUsers);
+            sslContext.init(kmf.getKeyManagers(), tmf.getTrustManagers(), null);
+            return sslContext.getSocketFactory();
 
         } catch (Exception e) {
-            System.out.println("Error initializing P2PClient: " + e.getMessage());
-            e.printStackTrace();
-            throw new RuntimeException("Failed to initialize P2PClient", e);
+            System.out.println("Error creating SSL context: " + e.getMessage());
+            return null;
         }
     }
+
 
     /**
      * Serializes a User object to a byte array.
@@ -86,6 +99,9 @@ public class P2PClient {
      */
     public void sendUserToCentralServer(List<byte[]> users) {
         try {
+            clientSocket = (SSLSocket) sslSocketFactory.createSocket(InetAddress.getLocalHost(), 8888);
+            System.out.println("ola");
+            // Initialize DataOutputStream with the socket's output stream
             // Connect to central server over SSL
             clientSocket = (SSLSocket) sslSocketFactory.createSocket(InetAddress.getLocalHost(), 8888);
 
