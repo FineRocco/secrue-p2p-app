@@ -44,8 +44,7 @@ public class P2PServer {
     private static final Object userAuxLock = new Object();
     private static User userAux;
     private final User user;
-    private final int port;
-    // The port on which the server listens
+    private final int port;// The port on which the server listens
     private SSLServerSocket serverSocket;
     private volatile boolean running = true; // Will be modified by different threads
     private BorderPane mainMenuLayout;  // Reference to the main layout in the JavaFX UI
@@ -119,10 +118,10 @@ public class P2PServer {
             X509Certificate cert = EncriptionService.generateSelfSignedCertificate(keyPair);
 
             // Save peer's keystore with its own key pair and certificate
-            EncriptionService.saveKeyStore(keyPair, cert, user.getUserName());
+            EncriptionService.saveKeyStore(keyPair, cert, user.getUserID());
 
             // Import peer certificate into server's truststore
-            EncriptionService.importCertToTruststore(cert, "server-truststore.jks", user.getUserName());
+            EncriptionService.importCertToTruststore(cert, "server-truststore.jks", user.getUserID());
 
             // Reload SSL context to include the newly imported certificate
             initializeSSLContext();
@@ -140,7 +139,7 @@ public class P2PServer {
             KeyManagerFactory kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
             KeyStore ks = KeyStore.getInstance("JKS");
 
-            try (InputStream keyStoreStream = new FileInputStream(EncriptionService.getStoreDirectory() + user.getUserName() + "-keystore.jks")) {
+            try (InputStream keyStoreStream = new FileInputStream(EncriptionService.getStoreDirectory() + user.getUserID() + "-keystore.jks")) {
                 ks.load(keyStoreStream, "centralServer".toCharArray());
             }
             kmf.init(ks, "centralServer".toCharArray());
@@ -272,6 +271,5 @@ public class P2PServer {
                 mainMenuLayout.setCenter(new StackPane(messageLabel)); // Display message in UI
             });
         }
-
     }
 }

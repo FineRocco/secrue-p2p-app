@@ -42,7 +42,10 @@ public class P2PClient {
             System.out.println("Failed to create SSL peer client socket factory.");
             return;
         }
-        sendUserToCentralServer(serializeUser(user));
+        // Serialize the user object and send it to the central server
+        List<byte[]> serializedUsers = new ArrayList<>();
+        serializedUsers.add(serializeUser(user));
+        sendUserToCentralServer(serializedUsers);
     }
 
     private static SSLSocketFactory createSSLSocketFactory(User user) {
@@ -51,7 +54,7 @@ public class P2PClient {
             KeyManagerFactory kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
             KeyStore ks = KeyStore.getInstance("JKS");
 
-            try (InputStream keyStoreStream = new FileInputStream(EncriptionService.getStoreDirectory() + user.getUserName() + "-keystore.jks")) {
+            try (InputStream keyStoreStream = new FileInputStream(EncriptionService.getStoreDirectory() + user.getUserID() + "-keystore.jks")) {
                 ks.load(keyStoreStream, "centralServer".toCharArray());
             }
             kmf.init(ks, "centralServer".toCharArray());
@@ -99,9 +102,6 @@ public class P2PClient {
      */
     public void sendUserToCentralServer(List<byte[]> users) {
         try {
-            clientSocket = (SSLSocket) sslSocketFactory.createSocket(InetAddress.getLocalHost(), 8888);
-            System.out.println("ola");
-            // Initialize DataOutputStream with the socket's output stream
             // Connect to central server over SSL
             clientSocket = (SSLSocket) sslSocketFactory.createSocket(InetAddress.getLocalHost(), 8888);
 
