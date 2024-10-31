@@ -1,39 +1,22 @@
 package com.psd;
 
-import com.psd.entities.*;
-
+import com.psd.entities.Conversation;
+import com.psd.entities.Message;
+import com.psd.entities.User;
 import javafx.application.Application;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
-import javafx.scene.control.Button;
-import javafx.scene.control.ComboBox;
-import javafx.scene.control.Label;
-import javafx.scene.control.ScrollPane;
-import javafx.scene.control.TextArea;
-import javafx.scene.control.TextField;
-import javafx.scene.layout.BorderPane;
-import javafx.scene.layout.GridPane;
-import javafx.scene.layout.HBox;
-import javafx.scene.layout.StackPane;
-import javafx.scene.layout.VBox;
+import javafx.scene.control.*;
+import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
 import javafx.stage.Stage;
 
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.net.BindException;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
-import java.security.*;
+import java.time.format.DateTimeFormatter;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.HashMap;
-
-import java.io.FileInputStream;
-import java.io.InputStream;
-import java.security.cert.CertificateException;
-import java.time.format.DateTimeFormatter;
 
 /**
  * Main class for the Secure P2P Messaging Application.
@@ -129,9 +112,11 @@ public class SecureP2PMessagingApp extends Application {
                 Scene mainMenuScene = new Scene(mainMenuLayout, 550, 400);
                 primaryStage.setScene(mainMenuScene);
 
-            } catch (Exception ex) {
+            } catch (RuntimeException ex) {
                 // Handle the error if the port is not a valid integer
                 portInput.setPromptText("Enter a valid port number");
+            } catch (UnknownHostException ex) {
+                throw new RuntimeException(ex);
             }
         });
 
@@ -143,16 +128,6 @@ public class SecureP2PMessagingApp extends Application {
             TextField contactUsernameInput = new TextField();
             contactUsernameInput.setPromptText("Enter the receiver's username");
 
-            /*Label contactIpLabel = new Label("IP address:");
-            contactIpLabel.setTextFill(Color.BLACK);
-            TextField contactIpInput = new TextField();
-            contactIpInput.setPromptText("Enter the receiver's IP address");
-
-            Label contactPortLabel = new Label("Port:");
-            contactPortLabel.setTextFill(Color.BLACK);
-            TextField contactPortInput = new TextField();
-            contactPortInput.setPromptText("Enter the receiver's port");
-            */
             Label messageLabel = new Label("Message:");
             messageLabel.setTextFill(Color.BLACK);
             TextArea messageInput = new TextArea();
@@ -168,8 +143,6 @@ public class SecureP2PMessagingApp extends Application {
             sendDirectMessageLayout.setStyle("-fx-background-color: #f5f5f5; -fx-padding: 10;");
             sendDirectMessageLayout.getChildren().addAll(
                     contactUsernameLabel, contactUsernameInput,
-                    //contactIpLabel, contactIpInput,
-                    //contactPortLabel, contactPortInput,
                     messageLabel, messageInput, sendButton
             );
 
@@ -192,7 +165,7 @@ public class SecureP2PMessagingApp extends Application {
                         Label confirmationLabel = new Label(success ? "Message sent to " + receiverName :
                                 "Failed to send message to " + receiverName);
                         confirmationLabel.setTextFill(success ? Color.GREEN : Color.RED);
-                        mainMenuLayout.setCenter(new StackPane(confirmationLabel)); // Atualiza o centro com a confirmação
+                        mainMenuLayout.setCenter(new StackPane(confirmationLabel));
 
                     } else {
                         if (receiverName.isEmpty()) {
@@ -202,8 +175,8 @@ public class SecureP2PMessagingApp extends Application {
                             messageInput.setPromptText("Enter a message");
                         }
                     }
-                } catch (NumberFormatException ex) {
-                    //contactPortInput.setPromptText("Enter a valid port number");
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
                 }
             });
         });
@@ -258,7 +231,8 @@ public class SecureP2PMessagingApp extends Application {
                     String selectedConvoLabel = conversationComboBox.getValue();
                     if (selectedConvoLabel != null) {
                         Conversation selectedConvo = conversationMap.get(selectedConvoLabel);
-                        User otherParticipant = selectedConvo.getParticipant1().equals(currentUser) ? selectedConvo.getParticipant2() : selectedConvo.getParticipant1();
+                        User otherParticipant = selectedConvo.getParticipant1().equals(currentUser) ?
+                                selectedConvo.getParticipant2() : selectedConvo.getParticipant1();
 
                         // Create a vertical layout to hold the conversation details and input area
                         VBox conversationLayout = new VBox(10);
@@ -348,5 +322,4 @@ public class SecureP2PMessagingApp extends Application {
         });
 
     }
-
 }

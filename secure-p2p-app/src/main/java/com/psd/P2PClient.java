@@ -5,115 +5,133 @@ import com.psd.entities.User;
 import javax.net.ssl.*;
 import java.io.*;
 import java.net.InetAddress;
-import java.security.KeyManagementException;
 import java.security.KeyStore;
-import java.security.KeyStoreException;
-import java.security.NoSuchAlgorithmException;
-import java.security.UnrecoverableKeyException;
-import java.security.cert.CertificateException;
 import java.util.ArrayList;
 import java.util.List;
 
 public class P2PClient {
 
+    private final SSLSocketFactory sslSocketFactory;
     private SSLSocket clientSocket;
-    private SSLSocketFactory ssf;
 
+    /**
+     * Initializes the P2PClient by setting up an SSL context, creating an SSLSocketFactory, and sending the user data to the central server.
+     *
+     * @param user The User object to be serialized and sent to the central server.
+     */
     public P2PClient(User user) {
         try {
-            // Setup SSL context with the keystore and truststore
+            // Set up SSL context for secure communication
             SSLContext sslContext = SSLContext.getInstance("TLS");
-            KeyManagerFactory kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
-            KeyStore ks = KeyStore.getInstance("JKS");
+            KeyManagerFactory keyManagerFactory = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
+            KeyStore keyStore = KeyStore.getInstance("JKS");
 
-            // Load the keystore (adjust the path to your keystore)
+            // Load the keystore from file
             try (InputStream keyStoreStream = new FileInputStream("keystore.jks")) {
-                ks.load(keyStoreStream, "psd2024".toCharArray());
+                keyStore.load(keyStoreStream, "psd2024".toCharArray());
             }
 
-            // Initialize KeyManagerFactory with the keystore
-            kmf.init(ks, "psd2024".toCharArray());
+            // Initialize KeyManager with keystore
+            keyManagerFactory.init(keyStore, "psd2024".toCharArray());
 
-            // Load the truststore
+            // Load and initialize truststore
             KeyStore trustStore = KeyStore.getInstance("JKS");
             try (InputStream trustStoreStream = new FileInputStream("truststore.jks")) {
                 trustStore.load(trustStoreStream, "psd2024".toCharArray());
             }
 
-            // Initialize TrustManagerFactory with the truststore
-            TrustManagerFactory tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
-            tmf.init(trustStore);
+            TrustManagerFactory trustManagerFactory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+            trustManagerFactory.init(trustStore);
 
-            // Initialize the SSLContext with both key managers and trust managers
-            sslContext.init(kmf.getKeyManagers(), tmf.getTrustManagers(), null);
+            // Configure SSLContext with key and trust managers
+            sslContext.init(keyManagerFactory.getKeyManagers(), trustManagerFactory.getTrustManagers(), null);
 
-            // Create an SSLSocketFactory from the SSLContext
-            ssf = sslContext.getSocketFactory();
+            // Create SSLSocketFactory from SSLContext
+            sslSocketFactory = sslContext.getSocketFactory();
 
-            List<byte[]> uList = new ArrayList<>();
-            uList.add(serializeUser(user));
-            sendUserToCentralServer(uList);
+            // Serialize the user object and send it to the central server
+            List<byte[]> serializedUsers = new ArrayList<>();
+            serializedUsers.add(serializeUser(user));
+            sendUserToCentralServer(serializedUsers);
 
         } catch (Exception e) {
             System.out.println("Error initializing P2PClient: " + e.getMessage());
-            throw new RuntimeException(e);
+            e.printStackTrace();
+            throw new RuntimeException("Failed to initialize P2PClient", e);
         }
     }
 
+    /**
+     * Serializes a User object to a byte array.
+     *
+     * @param user The User object to be serialized.
+     * @return A byte array representing the serialized user object.
+     */
     private byte[] serializeUser(User user) {
         try (ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
              ObjectOutputStream out = new ObjectOutputStream(byteOut)) {
-            out.writeObject(user);
+            out.writeObject(user); // Serialize user object
             return byteOut.toByteArray();
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            System.out.println("Error serializing user: " + e.getMessage());
+            e.printStackTrace();
+            throw new RuntimeException("Failed to serialize user", e);
         }
     }
 
-    private static User deserializeUser(byte[] data) throws IOException, ClassNotFoundException {
-        try (ByteArrayInputStream byteIn = new ByteArrayInputStream(data);
-             ObjectInputStream in = new ObjectInputStream(byteIn)) {
-            return (User) in.readObject();
-        }
-    }
-
+    /**
+     * Sends a list of serialized user data to the central server.
+     *
+     * @param users List of serialized user objects in byte array format.
+     */
     public void sendUserToCentralServer(List<byte[]> users) {
         try {
-            clientSocket = (SSLSocket) ssf.createSocket(InetAddress.getLocalHost(), 8888);
+            // Connect to central server over SSL
+            clientSocket = (SSLSocket) sslSocketFactory.createSocket(InetAddress.getLocalHost(), 8888);
 
+            // Set up output stream for sending data
             DataOutputStream dataOut = new DataOutputStream(clientSocket.getOutputStream());
 
-            // Send the number of users (1 user = registration, 2 users = retrieval request)
+            // Send the number of user objects
             dataOut.writeInt(users.size());
 
-            for (byte[] u : users) {
-                // Send the length of the serialized user data
-                dataOut.writeInt(u.length);
-                // Send the serialized user data
-                dataOut.write(u);
+            // Send each user object
+            for (byte[] user : users) {
+                dataOut.writeInt(user.length); // Send length of user data
+                dataOut.write(user); // Send user data
             }
 
             dataOut.flush();
 
-
         } catch (IOException e) {
-            System.out.println("Error sending user to central server: " + e.getMessage());
-            throw new RuntimeException(e);
+            System.out.println("Error connecting to central server: " + e.getMessage());
+            e.printStackTrace();
+            throw new RuntimeException("Failed to connect to central server", e);
         }
     }
 
-    public void sendMessage(User receiver, byte[] message) throws IOException {
-        clientSocket = (SSLSocket) ssf.createSocket(receiver.getIpAddress(), receiver.getPort());
+    /**
+     * Sends a message to a specified user by connecting to their IP and port over SSL.
+     *
+     * @param receiver The User object representing the message receiver.
+     * @param message  The message to be sent as a byte array.
+     * @throws IOException if an I/O error occurs during message sending.
+     */
+    public void sendMessage(User receiver, byte[] message) {
+        try {
+            // Connect to the receiver's IP and port over SSL
+            clientSocket = (SSLSocket) sslSocketFactory.createSocket(receiver.getIpAddress(), receiver.getPort());
 
-        // Initialize DataOutputStream with the socket's output stream
-        DataOutputStream dataOut = new DataOutputStream(clientSocket.getOutputStream());
-        // Send the length of the message first
-        dataOut.writeInt(message.length);
-
-        // Send the serialized message to the connected peer
-        dataOut.write(message);
-        dataOut.flush();
-
+            // Initialize output stream for sending message
+            DataOutputStream dataOut = new DataOutputStream(clientSocket.getOutputStream());
+            dataOut.writeInt(message.length); // Send message length
+            dataOut.write(message); // Send message data
+            dataOut.flush();
+        } catch (IOException e) {
+            System.out.println("Error connecting to receiver: " + e.getMessage());
+            e.printStackTrace();
+            throw new RuntimeException("Failed to connect to receiver", e);
+        }
     }
 
 }

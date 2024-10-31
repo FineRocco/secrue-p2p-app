@@ -1,26 +1,19 @@
 package com.psd;
 
 import com.psd.entities.Conversation;
+import com.psd.entities.Message;
 import com.psd.entities.User;
 import javafx.application.Platform;
+import javafx.scene.control.Alert;
 import javafx.scene.control.Label;
-import javafx.scene.layout.StackPane;
 import javafx.scene.layout.BorderPane;
+import javafx.scene.layout.StackPane;
 
 import javax.net.ssl.*;
-
-import com.psd.entities.Message;
-
 import java.io.*;
 import java.net.InetAddress;
-import java.net.ServerSocket;
-import java.net.Socket;
-import java.security.KeyManagementException;
+import java.net.UnknownHostException;
 import java.security.KeyStore;
-import java.security.KeyStoreException;
-import java.security.NoSuchAlgorithmException;
-import java.security.UnrecoverableKeyException;
-import java.security.cert.CertificateException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -28,139 +21,29 @@ import java.util.Map;
 
 /**
  * Represents a P2P server that listens for incoming messages from peers.
- * Each user has their own P2PServer running, which listens on the specified port.
+ * Each user has their own P2PServer instance listening on a specified port.
  */
 public class P2PServer {
 
-    private User user;
-    private static User userAux;
+    private static final Map<String, Conversation> conversations = new HashMap<>();
     private static final Object userAuxLock = new Object();
-    private int port;  // The port on which the server listens
+    private static User userAux;
+    private final User user;
+    private final int port;
+    private final BorderPane mainMenuLayout;
+    private final P2PClient client;
+    private final boolean running = true;
     private SSLServerSocket serverSocket;
-    private volatile boolean running = true; // Will be modified by different threads
-    private BorderPane mainMenuLayout;  // Reference to the main layout in the JavaFX UI
-    private static Map<String, Conversation> conversations;
-    private P2PClient client;
 
     public P2PServer(User user, BorderPane mainMenuLayout) {
         this.user = user;
         this.port = user.getPort();
-        this.mainMenuLayout = mainMenuLayout;  // Initialize the layout reference
-        this.conversations = new HashMap<>();
+        this.mainMenuLayout = mainMenuLayout;
         this.client = new P2PClient(user);
-        new Thread(() -> {
-            start();  // This will listen in the background
-        }).start();
-    }
+
+        new Thread(this::start).start(); // Start server on a new thread
 
 
-    /**
-     * Starts the server to listen for incoming messages on the specified port.
-     *
-     * @throws KeyManagementException
-     * @throws NoSuchAlgorithmException
-     * @throws KeyStoreException
-     * @throws UnrecoverableKeyException
-     * @throws CertificateException
-     */
-    public void start() {
-        try {
-            // Setup SSL context with the keystore and truststore
-            SSLContext sslContext = SSLContext.getInstance("TLS");
-            KeyManagerFactory kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
-            KeyStore ks = KeyStore.getInstance("JKS");
-
-            // Load the keystore
-            try (InputStream keyStoreStream = new FileInputStream("keystore.jks")) {
-                ks.load(keyStoreStream, "psd2024".toCharArray());  // Use your keystore password
-            }
-
-            kmf.init(ks, "psd2024".toCharArray());  // Initialize KeyManager with keystore password
-
-            // Load the truststore
-            KeyStore trustStore = KeyStore.getInstance("JKS");
-            try (InputStream trustStoreStream = new FileInputStream("truststore.jks")) {
-                trustStore.load(trustStoreStream, "psd2024".toCharArray());
-            }
-
-            // Initialize TrustManagerFactory with the truststore
-            TrustManagerFactory tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
-            tmf.init(trustStore);
-
-            // Initialize the SSLContext with both key managers and trust managers
-            sslContext.init(kmf.getKeyManagers(), tmf.getTrustManagers(), null);
-
-            // Create SSLServerSocket
-            SSLServerSocketFactory ssf = sslContext.getServerSocketFactory();
-            serverSocket = (SSLServerSocket) ssf.createServerSocket(port, 50, InetAddress.getByName(user.getIpAddress()));
-
-            System.out.println("P2PServer: Created socket with this data: " + serverSocket.getInetAddress().getHostAddress() +
-                    ":" + serverSocket.getLocalPort());
-
-            // Continuously listen for incoming connections
-            while (running) {
-                SSLSocket socket = (SSLSocket) serverSocket.accept();  // Accept incoming connection
-                new Thread(new ClientHandler(socket, mainMenuLayout)).start();  // Handle each client in a new thread
-            }
-
-        } catch (UnrecoverableKeyException | IOException | NoSuchAlgorithmException | CertificateException |
-                 KeyStoreException | KeyManagementException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    public boolean sendDirectMessage(Message message, User sender, User receiver) {
-        try {
-
-            // Check if conversation exists between sender and receiver
-            String conversationKey = getConversationKey(sender, receiver);
-            Conversation conversation = conversations.get(conversationKey);
-
-            if (conversation == null) {
-                List<byte[]> uList = new ArrayList<>();
-                uList.add(serializeMessage(sender));
-                uList.add(serializeMessage(receiver));
-                client.sendUserToCentralServer(uList);
-                // Sincronizar o acesso para aguardar a atualização de userAux
-                synchronized (userAuxLock) {
-                    // Verificar se o userAux está atualizado
-                    if (receiver.getIpAddress() == null || receiver.getPort() == 0) {
-                        System.out.println("Aguardando atualização de userAux com IP e Porta...");
-                        userAuxLock.wait(); // Espera até ser notificado
-                        receiver = userAux;
-                    }
-                }
-                // Create a new conversation if one does not exist
-                conversation = new Conversation(sender, receiver);
-                conversations.put(conversationKey, conversation);
-                System.out.println("New conversation created between " + sender.getUserID() + " and " + receiver.getUserID());
-            }
-
-            // Add the message to the conversation
-            conversation.addMessage(message);
-
-            // Serialize the message
-            byte[] serializedMessage = serializeMessage(message);
-
-            System.out.println("P2PClient: Send message to " + receiver.getIpAddress() + ":" + receiver.getPort());
-            // Send the actual serialized message
-            client.sendMessage(receiver, serializedMessage);
-
-            return true;
-        } catch (IOException e) {
-            return false;
-        } catch (InterruptedException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-
-    private byte[] serializeMessage(Object message) throws IOException {
-        try (ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
-             ObjectOutputStream out = new ObjectOutputStream(byteOut)) {
-            out.writeObject(message);
-            return byteOut.toByteArray();
-        }
     }
 
     private static Object deserializeMessage(byte[] data) throws IOException, ClassNotFoundException {
@@ -172,31 +55,104 @@ public class P2PServer {
 
     /**
      * Creates a unique key for each conversation between two users.
-     *
-     * @param user1 The first participant
-     * @param user2 The second participant
-     * @return A string key representing the unique conversation
      */
     private static String getConversationKey(User user1, User user2) {
-        // Ensure consistent ordering to avoid duplicate keys
-        if (user1.getUserID().compareTo(user2.getUserID()) < 0) {
-            return user1.getUserID() + "-" + user2.getUserID();
-        } else {
-            return user2.getUserID() + "-" + user1.getUserID();
+        return (user1.getUserID().compareTo(user2.getUserID()) < 0)
+                ? user1.getUserID() + "-" + user2.getUserID()
+                : user2.getUserID() + "-" + user1.getUserID();
+    }
+
+    /**
+     * Starts the server to listen for incoming messages on the specified port.
+     */
+    public void start() {
+        try {
+            SSLContext sslContext = configureSSLContext(); // Configure SSL context
+            SSLServerSocketFactory ssf = sslContext.getServerSocketFactory();
+            serverSocket = (SSLServerSocket) ssf.createServerSocket(port, 50, InetAddress.getByName(user.getIpAddress()));
+
+            System.out.printf("P2PServer started at %s:%d%n", serverSocket.getInetAddress().getHostAddress(), port);
+
+            // Listen for incoming connections
+            while (running) {
+                SSLSocket clientSocket = (SSLSocket) serverSocket.accept();
+                new Thread(new ClientHandler(clientSocket, mainMenuLayout)).start(); // Handle each client on a new thread
+            }
+        } catch (Exception e) {
+            System.err.println("Server error: " + e.getMessage());
+        }
+
+    }
+
+    /**
+     * Configures SSL context using keystore and truststore.
+     */
+    private SSLContext configureSSLContext() throws Exception {
+        SSLContext sslContext = SSLContext.getInstance("TLS");
+        KeyManagerFactory kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
+        TrustManagerFactory tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+
+        // Load keystore
+        KeyStore keyStore = KeyStore.getInstance("JKS");
+        try (InputStream keyStoreStream = new FileInputStream("keystore.jks")) {
+            keyStore.load(keyStoreStream, "psd2024".toCharArray());
+        }
+        kmf.init(keyStore, "psd2024".toCharArray());
+
+        // Load truststore
+        KeyStore trustStore = KeyStore.getInstance("JKS");
+        try (InputStream trustStoreStream = new FileInputStream("truststore.jks")) {
+            trustStore.load(trustStoreStream, "psd2024".toCharArray());
+        }
+        tmf.init(trustStore);
+
+        sslContext.init(kmf.getKeyManagers(), tmf.getTrustManagers(), null);
+        return sslContext;
+    }
+
+    /**
+     * Sends a direct message from the sender to the receiver.
+     */
+    public boolean sendDirectMessage(Message message, User sender, User receiver) {
+        try {
+            // Check if receiver details need to be updated from the server
+            if (receiver.getIpAddress() == null || receiver.getPort() == 0) {
+                client.sendUserToCentralServer(List.of(serializeMessage(sender), serializeMessage(receiver)));
+                synchronized (userAuxLock) {
+                    userAuxLock.wait(); // Wait for receiver details update
+                    receiver = userAux;
+                }
+            }
+            User finalReceiver = receiver;
+
+            String conversationKey = getConversationKey(sender, finalReceiver);
+            Conversation conversation = conversations.computeIfAbsent(conversationKey, key -> new Conversation(sender, finalReceiver));
+
+            // Add message to conversation and send it
+            conversation.addMessage(message);
+            client.sendMessage(finalReceiver, serializeMessage(message));
+            return true;
+        } catch (Exception e) {
+            System.err.println("Failed to send message: " + e.getMessage());
+            return false;
+        }
+    }
+
+    private byte[] serializeMessage(Object message) throws IOException {
+        try (ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
+             ObjectOutputStream out = new ObjectOutputStream(byteOut)) {
+            out.writeObject(message);
+            return byteOut.toByteArray();
         }
     }
 
     /**
      * Retrieves all conversations involving the specified user.
-     *
-     * @param user The user whose conversations are to be retrieved.
-     * @return A list of conversations involving the user.
      */
     public List<Conversation> getAllConversations(User user) {
         List<Conversation> userConversations = new ArrayList<>();
         for (Conversation conversation : conversations.values()) {
-            if (conversation.getParticipant1().getUserID().equals(user.getUserID()) ||
-                    conversation.getParticipant2().getUserID().equals(user.getUserID())) {
+            if (conversation.isParticipant(user)) {
                 userConversations.add(conversation);
             }
         }
@@ -204,84 +160,66 @@ public class P2PServer {
     }
 
     /**
-     * Handles the communication with an individual client (peer) in a separate thread.
+     * Handles communication with an individual client in a separate thread.
      */
     private static class ClientHandler implements Runnable {
-        private SSLSocket socket;
-        private BorderPane mainMenuLayout;  // Reference to the main layout for UI updates
+        private final SSLSocket socket;
+        private final BorderPane mainMenuLayout;
 
         public ClientHandler(SSLSocket socket, BorderPane mainMenuLayout) {
             this.socket = socket;
-            this.mainMenuLayout = mainMenuLayout;  // Store layout reference for UI update
+            this.mainMenuLayout = mainMenuLayout;
         }
 
         @Override
         public void run() {
-            try {
-                // Read the message sent by the peer
-                DataInputStream dataIn = new DataInputStream(socket.getInputStream());
-
-                // Read the length of the incoming message
+            try (DataInputStream dataIn = new DataInputStream(socket.getInputStream())) {
                 int messageLength = dataIn.readInt();
-
-                // Initialize a byte array to hold the exact message size
                 byte[] messageBytes = new byte[messageLength];
+                dataIn.readFully(messageBytes);
 
-                // Read the message into the byte array
-                int totalBytesRead = 0;
-                while (totalBytesRead < messageLength) {
-                    int bytesRead = dataIn.read(messageBytes, totalBytesRead, messageLength - totalBytesRead);
-                    if (bytesRead == -1) break; // End of stream
-                    totalBytesRead += bytesRead;
+                // Handle either a Message or a User object
+                Object receivedObject = deserializeMessage(messageBytes);
+                if (receivedObject instanceof Message) {
+                    handleMessage((Message) receivedObject);
+                } else if (receivedObject instanceof User) {
+                    updateUserAux((User) receivedObject);
                 }
-
-                if(deserializeMessage(messageBytes) instanceof Message) {
-                    // Deserialize the message
-                    Message message = (Message) deserializeMessage(messageBytes);
-
-                    System.out.println("Clienthandler: Received message from " + message.getSender().getIpAddress() + ":" + message.getSender().getPort());
-
-                    // Check if conversation exists between sender and receiver
-                    String conversationKey = getConversationKey(message.getSender(), message.getReceiver());
-                    Conversation conversation = conversations.get(conversationKey);
-
-                    if (conversation == null) {
-                        // Create a new conversation if one does not exist
-                        conversation = new Conversation(message.getSender(), message.getReceiver());
-                        conversations.put(conversationKey, conversation);
-                        System.out.println("New conversation created between " + message.getSender().getUserID() + " and " + message.getReceiver().getUserID());
-                    }
-
-                    // Add the message to the conversation
-                    conversation.addMessage(message);
-
-                    // Update the JavaFX UI on the JavaFX Application Thread
-                    Platform.runLater(() -> {
-                        // Create a new label with the received message
-                        Label messageLabel = new Label("Received message from: " + message.getSender().getUserID());
-
-                        // Set this label to the center of the mainMenuLayout
-                        StackPane messagePane = new StackPane(messageLabel);
-                        mainMenuLayout.setCenter(messagePane);  // Update the center with the received message
-                    });
+            } catch (Exception e) {
+                System.err.println("ClientHandler error: " + e.getMessage());
+            } finally {
+                try {
+                    socket.close();
+                } catch (IOException e) {
+                    System.err.println("Failed to close socket: " + e.getMessage());
                 }
-                else{
-                    synchronized (userAuxLock) {
-                        userAux = (User) deserializeMessage(messageBytes);
-                        System.out.println("ClientHandler: userAux atualizado para " + userAux);
-                        userAuxLock.notifyAll(); // Notifica o sendDirectMessage
-                    }
-
-
-                }
-
-
-                socket.close();  // Close the connection after the message is received
-
-            } catch (IOException | ClassNotFoundException e) {
-                System.out.println(e.getMessage());
             }
         }
 
+        /**
+         * Updates the userAux object with new user details.
+         */
+        private void updateUserAux(User user) {
+            synchronized (userAuxLock) {
+                userAux = user;
+                userAuxLock.notifyAll(); // Notify waiting threads of the update
+            }
+        }
+
+        /**
+         * Processes a received message and updates the conversation and UI.
+         */
+        private void handleMessage(Message message) {
+            System.out.printf("Received message from %s:%d%n", message.getSender().getIpAddress(), message.getSender().getPort());
+
+            String conversationKey = getConversationKey(message.getSender(), message.getReceiver());
+            Conversation conversation = conversations.computeIfAbsent(conversationKey, key -> new Conversation(message.getSender(), message.getReceiver()));
+            conversation.addMessage(message);
+
+            Platform.runLater(() -> {
+                Label messageLabel = new Label("Received message from: " + message.getSender().getUserID());
+                mainMenuLayout.setCenter(new StackPane(messageLabel)); // Display message in UI
+            });
+        }
     }
 }

@@ -1,8 +1,8 @@
 package com.psd.entities;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.time.LocalDateTime;
 
 /**
  * Represents a conversation between two users.
@@ -11,18 +11,18 @@ import java.time.LocalDateTime;
 public class Conversation {
 
     // The two users involved in the conversation
-    private User participant1;
-    private User participant2;
+    private final User participant1;
+    private final User participant2;
 
     // A list of messages exchanged in the conversation
-    private List<Message> messages;
+    private final List<Message> messages;
 
     // Timestamp of when the conversation started
-    private LocalDateTime startTime;
+    private final LocalDateTime startTime;
 
     /**
      * Constructs a new Conversation between two users.
-     * 
+     *
      * @param participant1 The first user in the conversation.
      * @param participant2 The second user in the conversation.
      */
@@ -35,7 +35,7 @@ public class Conversation {
 
     /**
      * Adds a message to the conversation.
-     * 
+     *
      * @param message The message to be added.
      */
     public void addMessage(Message message) {
@@ -44,7 +44,7 @@ public class Conversation {
 
     /**
      * Returns the list of all messages in the conversation.
-     * 
+     *
      * @return A list of messages exchanged in this conversation.
      */
     public List<Message> getMessages() {
@@ -53,7 +53,7 @@ public class Conversation {
 
     /**
      * Returns the participant1 in the conversation.
-     * 
+     *
      * @return An user from the conversation.
      */
     public User getParticipant1() {
@@ -62,17 +62,26 @@ public class Conversation {
 
     /**
      * Returns the participant2 in the conversation.
-     * 
+     *
      * @return An user from the conversation.
      */
     public User getParticipant2() {
         return participant2;
     }
 
+    /**
+     * Checks if the specified user is a participant in the conversation.
+     *
+     * @param user The user to check.
+     * @return True if the user is a participant, false otherwise.
+     */
+    public boolean isParticipant(User user) {
+        return participant1.getUserID().equals(user.getUserID()) || participant2.getUserID().equals(user.getUserID());
+    }
 
     /**
      * Returns the timestamp of when the conversation started.
-     * 
+     *
      * @return The start time of the conversation.
      */
     public LocalDateTime getStartTime() {

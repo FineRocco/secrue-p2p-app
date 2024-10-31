@@ -1,35 +1,32 @@
 package com.psd.entities;
 
-import java.security.PrivateKey;
-import java.security.PublicKey;
-import java.time.LocalDateTime;
 import java.io.Serializable;
+import java.time.LocalDateTime;
 
 /**
  * Represents a message being exchanged between users in the P2P network.
- * Each message contains encrypted content, a signature, and metadata like the sender and recipient.
  */
-public class Message implements Serializable{
+public class Message implements Serializable {
 
     // Unique identifier for the message
-    private String messageID;
+    private final String messageID;
 
     // UserID of the sender
-    private User sender;
+    private final User sender;
 
     // UserID of the receiver
-    private User receiver;
+    private final User receiver;
 
-    // The actual (plain) content of the message before encryption (not stored after encryption)
-    private String content;
+    // The actual (plain) content of the message
+    private final String content;
 
     // The timestamp of when the message was created
-    private LocalDateTime timestamp;
+    private final LocalDateTime timestamp;
 
 
     /**
      * Constructs a new Message.
-     * 
+     *
      * @param messageID A unique identifier for the message.
      * @param sender    The user sending the message.
      * @param receiver  The user receiving the message.
@@ -56,7 +53,7 @@ public class Message implements Serializable{
 
     /**
      * Returns the sender of the message.
-     * 
+     *
      * @return The user who sent the message.
      */
     public User getSender() {
@@ -65,7 +62,7 @@ public class Message implements Serializable{
 
     /**
      * Returns the receiver of the message.
-     * 
+     *
      * @return The user who will receive the message.
      */
     public User getReceiver() {
@@ -73,8 +70,8 @@ public class Message implements Serializable{
     }
 
     /**
-     * Returns the plain content of the message before encryption.
-     * 
+     * Returns the plain content of the message.
+     *
      * @return The plain-text content of the message.
      */
     public String getContent() {
@@ -82,18 +79,8 @@ public class Message implements Serializable{
     }
 
     /**
-     * Sets the plain content of the message (for decryption purposes).
-     * 
-     * @param content The plain-text content of the message.
-     */
-    public void setContent(String content) {
-        this.content = content;
-    }
-
-
-    /**
      * Returns the timestamp when the message was created.
-     * 
+     *
      * @return The timestamp of message creation.
      */
     public LocalDateTime getTimestamp() {
