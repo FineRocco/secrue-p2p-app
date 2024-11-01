@@ -5,8 +5,17 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Represents a conversation between two users.
- * A conversation consists of a series of messages exchanged between the users.
+ * The {@code Conversation} class represents a conversation between two users 
+ * in a peer-to-peer messaging application. It maintains the list of messages 
+ * exchanged between the two users, as well as details about the participants and 
+ * the start time of the conversation.
+ *
+ * <p>Main functionalities include:
+ * <ul>
+ *   <li>Adding messages to the conversation</li>
+ *   <li>Retrieving the list of messages</li>
+ *   <li>Checking if a user is a participant in the conversation</li>
+ * </ul>
  */
 public class Conversation {
 
@@ -21,7 +30,8 @@ public class Conversation {
     private final LocalDateTime startTime;
 
     /**
-     * Constructs a new Conversation between two users.
+     * Constructs a new {@code Conversation} between two users and initializes 
+     * the start time and an empty list of messages.
      *
      * @param participant1 The first user in the conversation.
      * @param participant2 The second user in the conversation.
@@ -36,7 +46,7 @@ public class Conversation {
     /**
      * Adds a message to the conversation.
      *
-     * @param message The message to be added.
+     * @param message The {@link Message} to be added to the conversation.
      */
     public void addMessage(Message message) {
         messages.add(message);
@@ -45,25 +55,25 @@ public class Conversation {
     /**
      * Returns the list of all messages in the conversation.
      *
-     * @return A list of messages exchanged in this conversation.
+     * @return A list of {@link Message} objects exchanged in this conversation.
      */
     public List<Message> getMessages() {
         return messages;
     }
 
     /**
-     * Returns the participant1 in the conversation.
+     * Returns the first participant in the conversation.
      *
-     * @return An user from the conversation.
+     * @return The {@link User} representing the first participant.
      */
     public User getParticipant1() {
         return participant1;
     }
 
     /**
-     * Returns the participant2 in the conversation.
+     * Returns the second participant in the conversation.
      *
-     * @return An user from the conversation.
+     * @return The {@link User} representing the second participant.
      */
     public User getParticipant2() {
         return participant2;
@@ -72,8 +82,8 @@ public class Conversation {
     /**
      * Checks if the specified user is a participant in the conversation.
      *
-     * @param user The user to check.
-     * @return True if the user is a participant, false otherwise.
+     * @param user The {@link User} to check.
+     * @return {@code true} if the user is a participant, {@code false} otherwise.
      */
     public boolean isParticipant(User user) {
         return participant1.getUserID().equals(user.getUserID()) || participant2.getUserID().equals(user.getUserID());
@@ -82,10 +92,9 @@ public class Conversation {
     /**
      * Returns the timestamp of when the conversation started.
      *
-     * @return The start time of the conversation.
+     * @return The {@link LocalDateTime} representing the start time of the conversation.
      */
     public LocalDateTime getStartTime() {
         return startTime;
     }
-
 }

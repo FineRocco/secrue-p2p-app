@@ -1,8 +1,31 @@
+/**
+ * The {@code CentralServer} class serves as the main server in a secure peer-to-peer application.
+ * It uses SSL/TLS for secure communication and manages a registry of users, enabling the registration
+ * of new users and the retrieval of registered user information. Communication is handled via 
+ * SSL sockets to maintain privacy and authenticity in the peer-to-peer network.
+ *
+ * <p>Key functionalities include:
+ * <ul>
+ *   <li>Starting the server and accepting SSL connections from clients</li>
+ *   <li>Registering new users</li>
+ *   <li>Retrieving registered users</li>
+ *   <li>Sending user data to requesting peers</li>
+ * </ul>
+ *
+ * <p>Example usage:
+ * <pre>
+ *     CentralServer.registerUser(newUser);
+ *     User retrievedUser = CentralServer.getUser("userId");
+ * </pre>
+ *
+ * <p>Dependencies: This class requires {@code EncriptionService} for SSL/TLS setup and certificate management,
+ * and {@code SerializationService} for serializing and deserializing user data.
+ */
 package com.psd;
 
-import com.psd.entities.Message;
 import com.psd.entities.User;
 import com.psd.services.EncriptionService;
+import com.psd.services.SerializationService;
 
 import javax.net.ssl.*;
 
@@ -10,12 +33,9 @@ import org.bouncycastle.jce.provider.BouncyCastleProvider;
 
 import java.io.*;
 import java.net.InetAddress;
-import java.security.KeyPair;
-import java.security.KeyStore;
 import java.util.ArrayList;
 import java.util.List;
 import java.security.Security;
-import java.security.cert.X509Certificate;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class CentralServer {
@@ -23,18 +43,18 @@ public class CentralServer {
     private static final int SERVER_PORT = 8888;
     private static volatile boolean isRunning = false;
     private static SSLSocketFactory sslSocketFactory;
+    private static SSLServerSocketFactory sslServerSocketFactory;
 
-        static {
+    static {
         // Register the Bouncy Castle provider
         Security.addProvider(new BouncyCastleProvider());
     }
 
     public static void main(String[] args) {
         // Load SSL context
-        initializeServerKeys();
-        initializeServerTruststore();
-
-        SSLServerSocketFactory sslServerSocketFactory = createSSLServerSocketFactory();
+        EncriptionService.initializeServerKeys("server");
+        EncriptionService.initializeServerTruststore();
+        sslServerSocketFactory = EncriptionService.initializeServerSSLContext("server");
         if (sslServerSocketFactory == null) {
             System.out.println("Failed to create SSL server socket factory.");
             return;
@@ -44,7 +64,10 @@ public class CentralServer {
     }
 
     /**
-     * Starts the central server, accepting connections from clients.
+     * Starts the central server and accepts SSL client connections.
+     * Each connection is handled in a new thread via a {@link ClientHandler}.
+     *
+     * @param sslServerSocketFactory The SSLServerSocketFactory for creating secure sockets.
      */
     private static void startServer(SSLServerSocketFactory sslServerSocketFactory) {
         new Thread(() -> {
@@ -62,37 +85,10 @@ public class CentralServer {
         }).start();
     }
 
-    private static void initializeServerKeys() {
-        try {
-            KeyPair keyPair = EncriptionService.generateKeyPair();
-            X509Certificate cert = EncriptionService.generateSelfSignedCertificate(keyPair);
-            EncriptionService.saveKeyStore(keyPair, cert, "server"); // Generates 'server-keystore.jks'
-        } catch (Exception e) {
-            System.out.println("Error generating server keys and certificate: " + e.getMessage());
-        }
-    }
-
-    public static void initializeServerTruststore() {
-        try {
-            // Load the server keystore
-            KeyStore keyStore = KeyStore.getInstance("JKS");
-            try (FileInputStream keyStoreStream = new FileInputStream(EncriptionService.getStoreDirectory() + "server-keystore.jks")) {
-                keyStore.load(keyStoreStream, "centralServer".toCharArray());
-            }
-
-            // Retrieve the server certificate
-            X509Certificate serverCert = (X509Certificate) keyStore.getCertificate("server");
-
-            // Create the truststore and add the server certificate
-            EncriptionService.createServerTrustStore(serverCert); // Creates server-truststore.jks
-        } catch (Exception e) {
-            System.out.println("Error generating server truststore: " + e.getMessage());
-        }
-    }
-
-
     /**
-     * Registers a new user to the central server.
+     * Registers a new user to the central server by storing the user information in the registry.
+     *
+     * @param user The {@link User} object representing the user to be registered.
      */
     public static synchronized void registerUser(User user) {
         userRegistry.put(user.getUserID(), user);
@@ -100,55 +96,37 @@ public class CentralServer {
     }
 
     /**
-     * Fetches a user from the registry based on user ID.
+     * Retrieves a user from the registry based on the user ID.
+     *
+     * @param userId The unique identifier of the user.
+     * @return The {@link User} object if found, or {@code null} if no matching user exists.
      */
     public static synchronized User getUser(String userId) {
         return userRegistry.get(userId);
     }
 
-    private static byte[] serializeUser(User user) {
-        try (ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
-             ObjectOutputStream out = new ObjectOutputStream(byteOut)) {
-            out.writeObject(user);
-            return byteOut.toByteArray();
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    private static User deserializeUser(byte[] data) {
-        try (ByteArrayInputStream byteIn = new ByteArrayInputStream(data);
-             ObjectInputStream in = new ObjectInputStream(byteIn)) {
-            return (User) in.readObject();
-        } catch (IOException | ClassNotFoundException e) {
-            System.out.println("Deserialization error: " + e.getMessage());
-            throw new RuntimeException(e);
-        }
-    }
-
     /**
-     * Sends a user record to another user, or sends a '0' if the user doesn't exist.
+     * Sends a {@link User} record to another user if available; otherwise, sends a '0' to indicate
+     * that the requested user does not exist.
+     *
+     * @param toSend The {@link User} to whom the information is sent.
+     * @param requestedUser The {@link User} whose information is requested. If {@code null}, a '0' is sent.
      */
     public static void sendUser(User toSend, User requestedUser) {
         try {
-            createSSLServerSocketFactory();
+            sslSocketFactory = EncriptionService.initializeSSLContext(requestedUser.getUserID());
             SSLSocket clientSocket = (SSLSocket) sslSocketFactory.createSocket(toSend.getIpAddress(), toSend.getPort());
 
-            // Initialize DataOutputStream with the socket's output stream
             DataOutputStream dataOut = new DataOutputStream(clientSocket.getOutputStream());
 
             if (requestedUser != null) {
-                byte[] userBytes = serializeUser(requestedUser);
+                byte[] userBytes = SerializationService.serialize(requestedUser);
 
-                // Send the length of the serialized user data
-                dataOut.writeInt(userBytes.length);
-
-                // Send the serialized user data
-                dataOut.write(userBytes);
+                dataOut.writeInt(userBytes.length); // Send the length of the serialized user data
+                dataOut.write(userBytes); // Send the serialized user data
 
             } else {
-                // Send a message indicating user not found
-                dataOut.writeInt(0); // 0 indicates no user data sent
+                dataOut.writeInt(0); // '0' indicates no user data sent
             }
             dataOut.flush();
         } catch (IOException e) {
@@ -157,46 +135,18 @@ public class CentralServer {
         }
     }
 
-    private static SSLServerSocketFactory createSSLServerSocketFactory() {
-        try {
-            // Setup SSL context with the keystore and truststore
-            SSLContext sslContext = SSLContext.getInstance("TLS");
-            KeyManagerFactory kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
-            KeyStore ks = KeyStore.getInstance("JKS");
-
-            // Load server keystore created by EncriptionService
-            try (InputStream keyStoreStream = new FileInputStream(EncriptionService.getStoreDirectory() + "server-keystore.jks")) {
-                ks.load(keyStoreStream, "centralServer".toCharArray());
-            }
-
-            kmf.init(ks, "centralServer".toCharArray());
-
-            KeyStore trustStore = KeyStore.getInstance("JKS");
-            try (InputStream trustStoreStream = new FileInputStream(EncriptionService.getStoreDirectory() + "server-truststore.jks")) {
-                trustStore.load(trustStoreStream, "centralServer".toCharArray());
-            }
-
-            TrustManagerFactory tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
-            tmf.init(trustStore);
-
-            sslContext.init(kmf.getKeyManagers(), tmf.getTrustManagers(), null);
-
-            sslSocketFactory = sslContext.getSocketFactory();
-
-            return sslContext.getServerSocketFactory();
-
-        } catch (Exception e) {
-            System.out.println("Error creating SSL context: " + e.getMessage());
-            return null;
-        }
-    }
-
     /**
      * Handles communication with an individual client in a separate thread.
+     * Each client interaction is managed through an instance of this class.
      */
     private static class ClientHandler implements Runnable {
         private final SSLSocket socket;
 
+        /**
+         * Constructs a {@code ClientHandler} with the given SSL socket.
+         *
+         * @param socket The {@link SSLSocket} connected to the client.
+         */
         public ClientHandler(SSLSocket socket) {
             this.socket = socket;
         }
@@ -210,22 +160,16 @@ public class CentralServer {
                 List<User> users = new ArrayList<>(nrUsers);
 
                 for (int i = 0; i < nrUsers; i++) {
-                    // Read the length of the incoming message
-                    int messageLength = dataIn.readInt();
-                    // Initialize a byte array to hold the exact message size
-                    byte[] messageBytes = new byte[messageLength];
-                    // Read the message into the byte array
-                    dataIn.readFully(messageBytes);
-                    // Deserialize the message
-                    users.add(deserializeUser(messageBytes));
+                    int messageLength = dataIn.readInt(); // Read message length
+                    byte[] messageBytes = new byte[messageLength]; // Initialize byte array for message
+                    dataIn.readFully(messageBytes); // Read the message bytes
+                    users.add((User) SerializationService.deserialize(messageBytes)); // Deserialize user
                 }
 
                 if (nrUsers == 1) {
-                    // If only one user is sent, it's a registration request
-                    registerUser(users.get(0));
+                    registerUser(users.get(0)); // Register user if only one user is received
                 } else {
-                    // If multiple users are sent, assume it's a request to retrieve a user
-                    sendUser(users.get(0), getUser(users.get(1).getUserID()));
+                    sendUser(users.get(0), getUser(users.get(1).getUserID())); // Send user if multiple users received
                 }
 
                 socket.close();
