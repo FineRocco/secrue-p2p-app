@@ -131,6 +131,7 @@ public class CentralServer {
      */
     public static void sendUser(User toSend, User requestedUser) {
         try {
+            createSSLServerSocketFactory();
             SSLSocket clientSocket = (SSLSocket) sslSocketFactory.createSocket(toSend.getIpAddress(), toSend.getPort());
 
             // Initialize DataOutputStream with the socket's output stream

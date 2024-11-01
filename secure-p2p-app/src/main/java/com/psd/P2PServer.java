@@ -60,9 +60,7 @@ public class P2PServer {
         this.user = user;
         this.port = user.getPort();
         this.mainMenuLayout = mainMenuLayout;
-        this.client = new P2PClient(user);
         initializeServerKeys(); // Generate keys and import certificates
-        initializeSSLContext(); // Load SSL context with the latest truststore
         new Thread(this::start).start(); // Start server on a new thread
 
 
@@ -165,6 +163,7 @@ public class P2PServer {
      */
     public boolean sendDirectMessage(Message message, User sender, User receiver) {
         try {
+            initializeSSLContext();
             // Check if receiver details need to be updated from the server
             if (receiver.getIpAddress() == null || receiver.getPort() == 0) {
                 client.sendUserToCentralServer(List.of(serializeMessage(sender), serializeMessage(receiver)));

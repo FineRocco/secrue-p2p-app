@@ -23,7 +23,7 @@ import org.bouncycastle.operator.ContentSigner;
 public class EncriptionService {
 
     // Define the directory for all keystore and truststore files
-    public static final String STORE_DIRECTORY = "C:\\Users\\l3tim\\Desktop\\PSD\\secrue-p2p-app\\secrue-p2p-app\\secure-p2p-app\\src\\main\\java\\com\\psd\\stores\\";
+    public static final String STORE_DIRECTORY = "C:\\Users\\henri\\Desktop\\Universidade\\Mestrado\\PSD\\secrue-p2p-app\\secure-p2p-app\\src\\main\\java\\com\\psd\\stores\\";
 
     public static String getStoreDirectory() {
         return STORE_DIRECTORY;
@@ -86,7 +86,7 @@ public class EncriptionService {
         truststore.load(null, null); // Initialize empty truststore
 
         // Add server certificate to the truststore
-        truststore.setCertificateEntry("server-cert", cert);
+        truststore.setCertificateEntry("server", cert);
 
         // Save the truststore to a file
         try (FileOutputStream fos = new FileOutputStream(STORE_DIRECTORY + "server-truststore.jks")) {

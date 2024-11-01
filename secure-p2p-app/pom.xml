@@ -46,8 +46,16 @@
                 <version>0.0.8</version>
                 <configuration>
                     <mainClass>com.psd.SecureP2PMessagingApp</mainClass>
-                    <modulePath>--module-path</modulePath>
-                    <addModules>javafx.controls,javafx.fxml</addModules>
+                </configuration>
+            </plugin>
+
+            <!-- Exec Maven Plugin -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.5.0</version>
+                <configuration>
+                    <mainClass>com.psd.SecureP2PMessagingApp</mainClass>
                 </configuration>
             </plugin>
         </plugins>

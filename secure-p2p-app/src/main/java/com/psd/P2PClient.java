@@ -23,7 +23,8 @@ import java.security.cert.X509Certificate;
 
 public class P2PClient {
 
-    private final SSLSocketFactory sslSocketFactory;
+    private User user;
+    private SSLSocketFactory sslSocketFactory;
     private SSLSocket clientSocket;
 
     static {
@@ -37,24 +38,26 @@ public class P2PClient {
      * @param user The User object to be serialized and sent to the central server.
      */
     public P2PClient(User user) {
-        sslSocketFactory = createSSLSocketFactory(user); // Initialize SSL context when client is created
+        this.user = user;
+        sslSocketFactory = createSSLSocketFactory(); // Initialize SSL context when client is created
         if (sslSocketFactory == null) {
             System.out.println("Failed to create SSL peer client socket factory.");
             return;
         }
+
         // Serialize the user object and send it to the central server
         List<byte[]> serializedUsers = new ArrayList<>();
         serializedUsers.add(serializeUser(user));
         sendUserToCentralServer(serializedUsers);
     }
 
-    private static SSLSocketFactory createSSLSocketFactory(User user) {
+    private SSLSocketFactory createSSLSocketFactory() {
         try {
             SSLContext sslContext = SSLContext.getInstance("TLS");
             KeyManagerFactory kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
             KeyStore ks = KeyStore.getInstance("JKS");
 
-            try (InputStream keyStoreStream = new FileInputStream(EncriptionService.getStoreDirectory() + user.getUserID() + "-keystore.jks")) {
+            try (InputStream keyStoreStream = new FileInputStream(EncriptionService.getStoreDirectory() + this.user.getUserID() + "-keystore.jks")) {
                 ks.load(keyStoreStream, "centralServer".toCharArray());
             }
             kmf.init(ks, "centralServer".toCharArray());
@@ -102,6 +105,7 @@ public class P2PClient {
      */
     public void sendUserToCentralServer(List<byte[]> users) {
         try {
+            createSSLSocketFactory();
             // Connect to central server over SSL
             clientSocket = (SSLSocket) sslSocketFactory.createSocket(InetAddress.getLocalHost(), 8888);
 
@@ -135,6 +139,8 @@ public class P2PClient {
      */
     public void sendMessage(User receiver, byte[] message) {
         try {
+            sslSocketFactory = createSSLSocketFactory();
+
             // Connect to the receiver's IP and port over SSL
             clientSocket = (SSLSocket) sslSocketFactory.createSocket(receiver.getIpAddress(), receiver.getPort());
 
