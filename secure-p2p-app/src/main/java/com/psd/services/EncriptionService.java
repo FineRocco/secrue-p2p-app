@@ -43,7 +43,7 @@ import org.bouncycastle.operator.ContentSigner;
 public class EncriptionService {
 
     // Directory for storing keystore and truststore files
-    public static final String STORE_DIRECTORY = "C:\\Users\\l3tim\\Desktop\\PSD\\secrue-p2p-app\\secrue-p2p-app\\secure-p2p-app\\src\\main\\java\\com\\psd\\stores\\";
+    public static final String STORE_DIRECTORY = "secure-p2p-app\\src\\main\\java\\com\\psd\\stores\\";
 
     /**
      * Retrieves the store directory.
