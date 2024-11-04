@@ -72,7 +72,7 @@ public class CentralServer {
     private static void startServer(SSLServerSocketFactory sslServerSocketFactory) {
         new Thread(() -> {
             try (SSLServerSocket serverSocket = (SSLServerSocket) sslServerSocketFactory.createServerSocket(SERVER_PORT, 50, InetAddress.getLocalHost())) {
-                System.out.println("Central Server started on port: " + SERVER_PORT);
+                System.out.println("Central Server started on: " + InetAddress.getLocalHost().getHostAddress() + " : " + SERVER_PORT);
 
                 isRunning = true;
                 while (isRunning) {
