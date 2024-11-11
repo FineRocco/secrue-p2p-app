@@ -1,5 +1,6 @@
 package com.psd.entities;
 
+import java.io.Serializable;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -17,7 +18,7 @@ import java.util.List;
  *   <li>Checking if a user is a participant in the conversation</li>
  * </ul>
  */
-public class Conversation {
+public class Conversation implements Serializable {
 
     // The two users involved in the conversation
     private final User participant1;
