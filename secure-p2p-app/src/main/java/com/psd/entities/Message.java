@@ -23,6 +23,8 @@ import java.time.LocalDateTime;
  * </pre>
  */
 public class Message implements Serializable {
+    // Define a fixed serialVersionUID
+    private static final long serialVersionUID = 1L;
 
     // Unique identifier for the message
     private final String messageID;

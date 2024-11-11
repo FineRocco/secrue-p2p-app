@@ -159,17 +159,9 @@ public class P2PServer {
          * @return A unique key representing the conversation.
          */
         private static String getConversationKey(User user1, User user2) {
-            String combinedIds = (user1.getUserID().compareTo(user2.getUserID()) < 0)
+            return (user1.getUserID().compareTo(user2.getUserID()) < 0)
                     ? user1.getUserID() + "-" + user2.getUserID()
                     : user2.getUserID() + "-" + user1.getUserID();
-
-            try {
-                MessageDigest digest = MessageDigest.getInstance("SHA-256");
-                byte[] hash = digest.digest(combinedIds.getBytes());
-                return Base64.getEncoder().encodeToString(hash);
-            } catch (NoSuchAlgorithmException e) {
-                throw new RuntimeException("Error generating conversation key hash", e);
-            }
         }
     
         public List<Conversation> getAllConversations(User user) {

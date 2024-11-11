@@ -1,6 +1,7 @@
 package com.psd.entities;
 
 import java.io.Serializable;
+import java.util.Objects;
 
 /**
  * The {@code User} class represents a user in a peer-to-peer (P2P) network.
@@ -20,6 +21,9 @@ import java.io.Serializable;
  * </pre>
  */
 public class User implements Serializable {
+    // Define a fixed serialVersionUID
+    private static final long serialVersionUID = 1L;
+
     private final String userID; // Unique identifier for the user
 
     // IP address and port of the user in the P2P network
@@ -64,5 +68,18 @@ public class User implements Serializable {
      */
     public int getPort() {
         return port;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj) return true; // Check if both references are the same
+        if (obj == null || getClass() != obj.getClass()) return false;
+        User user = (User) obj;
+        return Objects.equals(userID, user.userID);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(userID);
     }
 }

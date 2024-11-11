@@ -217,6 +217,9 @@ public class SecureP2PMessagingApp extends Application {
                 for (int i = 0; i < conversations.size(); i++) {
                     Conversation conversation = conversations.get(i);
                     User participant = conversation.getParticipant1().equals(currentUser) ? conversation.getParticipant2() : conversation.getParticipant1();
+                    System.out.println("currentUser: " + currentUser.getUserID() + " & participant chosen: " + participant.getUserID());
+                    System.out.println("Participant1: " + conversation.getParticipant1().getUserID() + " & Participant2: " + conversation.getParticipant2().getUserID());
+                    System.out.println("Participant1: " + conversation.getParticipant1().getUserID() + " equals " + currentUser.getUserID() + "? Result: " + conversation.getParticipant1().equals(currentUser));
 
                     DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
                     String formattedTimestamp = conversation.getStartTime().format(formatter);

@@ -19,6 +19,8 @@ import java.util.List;
  * </ul>
  */
 public class Conversation implements Serializable {
+    // Define a fixed serialVersionUID
+    private static final long serialVersionUID = 1L;
 
     // The two users involved in the conversation
     private final User participant1;
