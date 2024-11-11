@@ -193,6 +193,18 @@ public class SecureP2PMessagingApp extends Application {
         conversationsButton.setOnAction(event -> {
             // Retrieve all conversations for the current user
             List<Conversation> conversations = userServer.getAllConversations(currentUser);
+            //DEBUGGING
+            System.out.println("Found " + conversations.size() + " conversations for " + currentUser.getUserID());
+            System.out.println("----------------------------------------------------");
+            for (Conversation conv : conversations) {
+                System.out.println("Conversation: " + conv.getConversationId() + " between " +
+                        conv.getParticipant1().getUserID() + " and " + conv.getParticipant2().getUserID());
+                for (Message msg : conv.getMessages()) {
+                    System.out.println("Message: " + msg.getContent());
+                }
+                System.out.println("----------------------------------------------------");
+            }
+            //DEBUGGING
 
             // Create a layout to display the conversations
             VBox conversationsLayout = new VBox(10);
@@ -217,9 +229,6 @@ public class SecureP2PMessagingApp extends Application {
                 for (int i = 0; i < conversations.size(); i++) {
                     Conversation conversation = conversations.get(i);
                     User participant = conversation.getParticipant1().equals(currentUser) ? conversation.getParticipant2() : conversation.getParticipant1();
-                    System.out.println("currentUser: " + currentUser.getUserID() + " & participant chosen: " + participant.getUserID());
-                    System.out.println("Participant1: " + conversation.getParticipant1().getUserID() + " & Participant2: " + conversation.getParticipant2().getUserID());
-                    System.out.println("Participant1: " + conversation.getParticipant1().getUserID() + " equals " + currentUser.getUserID() + "? Result: " + conversation.getParticipant1().equals(currentUser));
 
                     DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
                     String formattedTimestamp = conversation.getStartTime().format(formatter);
@@ -294,6 +303,7 @@ public class SecureP2PMessagingApp extends Application {
                             if (!messageContent.isEmpty()) {
                                 // Create and send the message
                                 Message newMessage = new Message("1", currentUser, otherParticipant, messageContent);
+                                System.out.println("Sending message: " + newMessage + " to " + otherParticipant.getUserID() + " from " + currentUser.getUserID());
                                 boolean success = userServer.sendDirectMessage(newMessage, currentUser, otherParticipant);
 
                                 newMessageInput.clear();

@@ -121,7 +121,8 @@ public class P2PServer {
         public boolean sendDirectMessage(Message message, User sender, User receiver) {
             try {
                 sslServerSocketFactory = EncriptionService.initializeServerSSLContext(user.getUserID());
-                
+
+                // Ensure receiver details are up-to-date if missing
                 if (receiver.getIpAddress() == null || receiver.getPort() == 0) {
                     client.sendUserToCentralServer(List.of(SerializationService.serialize(sender), SerializationService.serialize(receiver)));
                     synchronized (userAuxLock) {
@@ -130,18 +131,20 @@ public class P2PServer {
                     }
                 }
                 User finalReceiver = receiver;
-                String conversationKey = getConversationKey(sender, finalReceiver);
-                
-                // Load existing conversation from S3 or create new
-                Conversation conversation = aws3Storage.loadConversation(conversationKey);
+
+                // Create the unique conversation ID based on sender and receiver
+                String conversationId = Conversation.createConversation(sender, finalReceiver).getConversationId();
+
+                // Load existing conversation from S3 or create a new one if it doesn't exist
+                Conversation conversation = aws3Storage.loadConversation(conversationId);
                 if (conversation == null) {
-                    conversation = new Conversation(sender, finalReceiver);
+                    conversation = Conversation.createConversation(sender, finalReceiver);
                 }
-        
-                // Add message and save updated conversation to S3
+
+                // Add message to conversation and save updated conversation to S3
                 conversation.addMessage(message);
-                aws3Storage.saveConversation(conversationKey, conversation);
-        
+                aws3Storage.saveConversation(conversationId, conversation);
+
                 // Send message to the receiver
                 client.sendMessage(finalReceiver, SerializationService.serialize(message));
                 return true;
@@ -149,19 +152,6 @@ public class P2PServer {
                 System.err.println("Failed to send message: " + e.getMessage());
                 return false;
             }
-        }
-        
-        /**
-         * Creates a unique key for each conversation between two users.
-         *
-         * @param user1 The first user in the conversation.
-         * @param user2 The second user in the conversation.
-         * @return A unique key representing the conversation.
-         */
-        private static String getConversationKey(User user1, User user2) {
-            return (user1.getUserID().compareTo(user2.getUserID()) < 0)
-                    ? user1.getUserID() + "-" + user2.getUserID()
-                    : user2.getUserID() + "-" + user1.getUserID();
         }
     
         public List<Conversation> getAllConversations(User user) {
@@ -252,29 +242,29 @@ public class P2PServer {
              */
             private void handleMessage(Message message) {
                 System.out.printf("Received message from %s:%d%n", message.getSender().getIpAddress(), message.getSender().getPort());
-                
-                String conversationKey = getConversationKey(message.getSender(), message.getReceiver());
-                
+
+                // Create the unique conversation ID based on sender and receiver
+                String conversationId = Conversation.createConversation(message.getSender(), message.getReceiver()).getConversationId();
+
                 try {
                     // Load the conversation from S3 or create a new one if it doesn't exist
-                    Conversation conversation = aws3Storage.loadConversation(conversationKey);
+                    Conversation conversation = aws3Storage.loadConversation(conversationId);
                     if (conversation == null) {
-                        conversation = new Conversation(message.getSender(), message.getReceiver());
+                        conversation = Conversation.createConversation(message.getSender(), message.getReceiver());
                     }
-    
-                    // Add the received message to the conversation and save it back to S3
-                    conversation.addMessage(message);
-                    aws3Storage.saveConversation(conversationKey, conversation);
 
-                // Update the UI to display the received message
-                Platform.runLater(() -> {
-                    Label messageLabel = new Label("Received message from: " + message.getSender().getUserID());
-                    mainMenuLayout.setCenter(new StackPane(messageLabel)); // Display message in UI
-                });
-            } catch (IOException e) {
-                System.err.println("Error handling message: " + e.getMessage());
+                    // Add the received message to the conversation and save it back to S3
+                    aws3Storage.saveConversation(conversationId, conversation);
+
+                    // Update the UI to display the received message
+                    Platform.runLater(() -> {
+                        Label messageLabel = new Label("Received message from: " + message.getSender().getUserID());
+                        mainMenuLayout.setCenter(new StackPane(messageLabel)); // Display message in UI
+                    });
+                } catch (IOException e) {
+                    System.err.println("Error handling message: " + e.getMessage());
+                }
             }
-        }
 
     }
 }

@@ -19,31 +19,43 @@ import java.util.List;
  * </ul>
  */
 public class Conversation implements Serializable {
-    // Define a fixed serialVersionUID
     private static final long serialVersionUID = 1L;
 
-    // The two users involved in the conversation
+    private final String conversationId;
     private final User participant1;
     private final User participant2;
-
-    // A list of messages exchanged in the conversation
     private final List<Message> messages;
-
-    // Timestamp of when the conversation started
     private final LocalDateTime startTime;
 
     /**
-     * Constructs a new {@code Conversation} between two users and initializes 
-     * the start time and an empty list of messages.
+     * Private constructor for a {@code Conversation} between two users with a generated ID.
+     * This initializes the start time and an empty list of messages.
      *
+     * @param conversationId The unique ID of the conversation.
      * @param participant1 The first user in the conversation.
      * @param participant2 The second user in the conversation.
      */
-    public Conversation(User participant1, User participant2) {
+    private Conversation(String conversationId, User participant1, User participant2) {
+        this.conversationId = conversationId;
         this.participant1 = participant1;
         this.participant2 = participant2;
         this.messages = new ArrayList<>();
         this.startTime = LocalDateTime.now();
+    }
+
+    /**
+     * Static factory method to create a new {@code Conversation} between two users.
+     * Generates a unique conversation ID based on participant user IDs.
+     *
+     * @param participant1 The first user in the conversation.
+     * @param participant2 The second user in the conversation.
+     * @return A new {@code Conversation} object with a unique ID.
+     */
+    public static Conversation createConversation(User participant1, User participant2) {
+        String conversationId = (participant1.getUserID().compareTo(participant2.getUserID()) < 0)
+                ? participant1.getUserID() + "-" + participant2.getUserID()
+                : participant2.getUserID() + "-" + participant1.getUserID();
+        return new Conversation(conversationId, participant1, participant2);
     }
 
     /**
@@ -53,6 +65,15 @@ public class Conversation implements Serializable {
      */
     public void addMessage(Message message) {
         messages.add(message);
+    }
+
+    /**
+     * Returns the unique ID of the conversation.
+     *
+     * @return The unique conversation ID.
+     */
+    public String getConversationId() {
+        return conversationId;
     }
 
     /**
