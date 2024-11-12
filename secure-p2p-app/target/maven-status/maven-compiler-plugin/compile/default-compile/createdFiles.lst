@@ -7,6 +7,7 @@ com\psd\storage\AWS3Storage.class
 com\psd\P2PServer.class
 com\psd\entities\Conversation.class
 com\psd\CentralServer.class
+com\psd\storage\AzureBlobStorage.class
 com\psd\entities\User.class
 com\psd\SecureP2PMessagingApp.class
 com\psd\storage\FirebaseStorage.class

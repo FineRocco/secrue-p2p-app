@@ -18,14 +18,13 @@
  */
 package com.psd;
 
-import com.amazonaws.client.ClientHandler;
-import com.google.cloud.firestore.QueryDocumentSnapshot;
 import com.psd.entities.Conversation;
 import com.psd.entities.Message;
 import com.psd.entities.User;
 import com.psd.services.EncriptionService;
 import com.psd.services.SerializationService;
 import com.psd.storage.AWS3Storage;
+import com.psd.storage.AzureBlobStorage;
 import com.psd.storage.FirebaseStorage;
 
 import javafx.application.Platform;
@@ -39,9 +38,7 @@ import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import java.io.*;
 import java.net.InetAddress;
 import java.security.Security;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.ExecutionException;
 
 /**
  * Represents a P2P server that listens for incoming messages from peers.
@@ -60,6 +57,7 @@ public class P2PServer {
     private SSLServerSocketFactory sslServerSocketFactory;
     private static AWS3Storage aws3Storage;
     private static FirebaseStorage firebaseStorage;
+    private static AzureBlobStorage azureBlobStorage;
         
             static {
                 // Register the Bouncy Castle provider
@@ -79,6 +77,7 @@ public class P2PServer {
                 this.mainMenuLayout = mainMenuLayout;
                 P2PServer.aws3Storage = new AWS3Storage();
                 P2PServer.firebaseStorage = new FirebaseStorage();
+                P2PServer.azureBlobStorage = new AzureBlobStorage();
             new Thread(this::start).start(); // Start server on a new thread
         }
     
@@ -145,6 +144,12 @@ public class P2PServer {
                     conversation = firebaseStorage.loadConversation(conversationId);
                     System.out.println("Loaded conversation from Firebase.");
                 }
+
+                // If the conversation is not found in firebase, try loading it from AzureBlob
+                if (conversation == null) {
+                    conversation = azureBlobStorage.loadConversation(conversationId);
+                    System.out.println("Loaded conversation from AzureBlob.");
+                }
                 
                 // If the conversation is still not found, create a new one
                 if (conversation == null) {
@@ -155,9 +160,13 @@ public class P2PServer {
                 // Add message to conversation
                 conversation.addMessage(message);
 
-                // Save updated conversation to both AWS S3 and Firebase
+                // Save updated conversation to both AWS S3, Firebase and AzureBlob
+                System.out.println("Saving conversation to AWS S3.");
                 aws3Storage.saveConversation(conversationId, conversation);
+                System.out.println("Saved conversation to Firebase.");
                 firebaseStorage.saveConversation(conversationId, conversation);
+                System.out.println("Saved conversation to Azure Blob.");
+                azureBlobStorage.saveConversation(conversationId, conversation);
 
                 // Send message to the receiver
                 client.sendMessage(finalReceiver, SerializationService.serialize(message));
@@ -245,15 +254,22 @@ public class P2PServer {
                         System.out.println("Loaded conversation from Firebase.");
                     }
 
+                    // If the conversation is not found in firebase, try loading it from AzureBlob
+                    if (conversation == null) {
+                        conversation = azureBlobStorage.loadConversation(conversationId);
+                        System.out.println("Loaded conversation from AzureBlob.");
+                    }
+
                     // If the conversation is still not found, create a new one
                     if (conversation == null) {
                         conversation = Conversation.createConversation(message.getSender(), message.getReceiver());
                         System.out.println("Created a new conversation with ID: " + conversationId);
                     }
 
-                    // Save the updated conversation to both AWS S3 and Firebase
+                    // Save updated conversation to both AWS S3, Firebase and AzureBlob
                     aws3Storage.saveConversation(conversationId, conversation);
                     firebaseStorage.saveConversation(conversationId, conversation);
+                    azureBlobStorage.saveConversation(conversationId, conversation);
 
                     // Update the UI to display the received message
                     Platform.runLater(() -> {

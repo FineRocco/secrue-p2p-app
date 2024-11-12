@@ -4,6 +4,7 @@ import com.psd.entities.Conversation;
 import com.psd.entities.Message;
 import com.psd.entities.User;
 import com.psd.storage.AWS3Storage;
+import com.psd.storage.AzureBlobStorage;
 import com.psd.storage.FirebaseStorage;
 
 import javafx.application.Application;
@@ -36,6 +37,7 @@ public class SecureP2PMessagingApp extends Application {
     P2PServer userServer;
     AWS3Storage aws3Storage = new AWS3Storage();
     FirebaseStorage firebaseStorage = new FirebaseStorage();
+    AzureBlobStorage azureBlobStorage = new AzureBlobStorage();
 
     static {
         // Register the Bouncy Castle provider
@@ -205,14 +207,23 @@ public class SecureP2PMessagingApp extends Application {
                 System.out.println("Successfully retrieved conversations from AWS S3.");
             } catch (Exception e) {
                 System.err.println("Error retrieving conversations from AWS S3: " + e.getMessage());
+                
+                // Attempt to retrieve from Firebase if AWS S3 fails
                 System.out.println("Attempting to retrieve conversations from Firebase instead...");
-
-                // If AWS S3 retrieval fails, attempt to retrieve from Firebase
                 try {
                     conversations = firebaseStorage.getAllConversations(currentUser);
                     System.out.println("Successfully retrieved conversations from Firebase.");
                 } catch (Exception firebaseException) {
                     System.err.println("Error retrieving conversations from Firebase: " + firebaseException.getMessage());
+                    
+                    // If both AWS S3 and Firebase retrieval fail, attempt Azure Blob Storage
+                    System.out.println("Attempting to retrieve conversations from Azure Blob Storage instead...");
+                    try {
+                        conversations = azureBlobStorage.getAllConversations(currentUser);
+                        System.out.println("Successfully retrieved conversations from Azure Blob Storage.");
+                    } catch (Exception azureException) {
+                        System.err.println("Error retrieving conversations from Azure Blob Storage: " + azureException.getMessage());
+                    }
                 }
             }
             //DEBUGGING
