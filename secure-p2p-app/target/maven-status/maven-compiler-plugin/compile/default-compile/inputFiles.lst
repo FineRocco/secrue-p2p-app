@@ -1,4 +1,3 @@
-c:\Users\l3tim\Desktop\PSD\secrue-p2p-app\secure-p2p-app\src\main\java\com\psd\aws3.java
 c:\Users\l3tim\Desktop\PSD\secrue-p2p-app\secure-p2p-app\src\main\java\com\psd\CentralServer.java
 c:\Users\l3tim\Desktop\PSD\secrue-p2p-app\secure-p2p-app\src\main\java\com\psd\entities\Conversation.java
 c:\Users\l3tim\Desktop\PSD\secrue-p2p-app\secure-p2p-app\src\main\java\com\psd\entities\Message.java
@@ -8,3 +7,5 @@ c:\Users\l3tim\Desktop\PSD\secrue-p2p-app\secure-p2p-app\src\main\java\com\psd\P
 c:\Users\l3tim\Desktop\PSD\secrue-p2p-app\secure-p2p-app\src\main\java\com\psd\SecureP2PMessagingApp.java
 c:\Users\l3tim\Desktop\PSD\secrue-p2p-app\secure-p2p-app\src\main\java\com\psd\services\EncriptionService.java
 c:\Users\l3tim\Desktop\PSD\secrue-p2p-app\secure-p2p-app\src\main\java\com\psd\services\SerializationService.java
+c:\Users\l3tim\Desktop\PSD\secrue-p2p-app\secure-p2p-app\src\main\java\com\psd\storage\AWS3Storage.java
+c:\Users\l3tim\Desktop\PSD\secrue-p2p-app\secure-p2p-app\src\main\java\com\psd\storage\FirebaseStorage.java

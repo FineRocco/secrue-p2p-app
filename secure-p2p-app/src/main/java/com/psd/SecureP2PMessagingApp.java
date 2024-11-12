@@ -3,6 +3,9 @@ package com.psd;
 import com.psd.entities.Conversation;
 import com.psd.entities.Message;
 import com.psd.entities.User;
+import com.psd.storage.AWS3Storage;
+import com.psd.storage.FirebaseStorage;
+
 import javafx.application.Application;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
@@ -14,7 +17,9 @@ import javafx.stage.Stage;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.security.Security;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -29,13 +34,15 @@ public class SecureP2PMessagingApp extends Application {
 
     User currentUser;
     P2PServer userServer;
+    AWS3Storage aws3Storage = new AWS3Storage();
+    FirebaseStorage firebaseStorage = new FirebaseStorage();
+
     static {
         // Register the Bouncy Castle provider
         Security.addProvider(new BouncyCastleProvider());
     }
 
     public static void main(String[] args) {
-
         launch(args);
     }
 
@@ -191,8 +198,23 @@ public class SecureP2PMessagingApp extends Application {
 
         // Handle conversationsButton click
         conversationsButton.setOnAction(event -> {
-            // Retrieve all conversations for the current user
-            List<Conversation> conversations = userServer.getAllConversations(currentUser);
+            List<Conversation> conversations = new ArrayList<>();
+            try {
+                // Attempt to retrieve all conversations for the current user from AWS S3
+                conversations = aws3Storage.getAllConversations(currentUser);
+                System.out.println("Successfully retrieved conversations from AWS S3.");
+            } catch (Exception e) {
+                System.err.println("Error retrieving conversations from AWS S3: " + e.getMessage());
+                System.out.println("Attempting to retrieve conversations from Firebase instead...");
+
+                // If AWS S3 retrieval fails, attempt to retrieve from Firebase
+                try {
+                    conversations = firebaseStorage.getAllConversations(currentUser);
+                    System.out.println("Successfully retrieved conversations from Firebase.");
+                } catch (Exception firebaseException) {
+                    System.err.println("Error retrieving conversations from Firebase: " + firebaseException.getMessage());
+                }
+            }
             //DEBUGGING
             System.out.println("Found " + conversations.size() + " conversations for " + currentUser.getUserID());
             System.out.println("----------------------------------------------------");
@@ -231,9 +253,14 @@ public class SecureP2PMessagingApp extends Application {
                     User participant = conversation.getParticipant1().equals(currentUser) ? conversation.getParticipant2() : conversation.getParticipant1();
 
                     DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
-                    String formattedTimestamp = conversation.getStartTime().format(formatter);
+
+                    // Convert the Instant to ZonedDateTime using the system's default time zone
+                    String formattedTimestamp = conversation.getStartTime()
+                                                            .atZone(ZoneId.systemDefault())
+                                                            .format(formatter);
+                    
                     String conversationLabel = (i + 1) + ". Conversation with " + participant.getUserID() +
-                            " (Started on " + formattedTimestamp + ")";
+                                              " (Started on " + formattedTimestamp + ")";                    
 
                     conversationComboBox.getItems().add(conversationLabel);
                     conversationMap.put(conversationLabel, conversation);
@@ -268,12 +295,17 @@ public class SecureP2PMessagingApp extends Application {
 
                         for (Message msg : selectedConvo.getMessages()) {
                             DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
-                            String formattedTimestamp = msg.getTimestamp().format(formatter);
+                        
+                            // Convert the Instant to ZonedDateTime using the system's default time zone
+                            String formattedTimestamp = msg.getTimestamp()
+                                                            .atZone(ZoneId.systemDefault())
+                                                            .format(formatter);
+                        
                             String senderName = msg.getSender().equals(currentUser) ? "You" : otherParticipant.getUserID();
                             Label messageLabel = new Label(senderName + " [" + formattedTimestamp + "]: " + msg.getContent());
                             chatLogs.getChildren().add(messageLabel);
                         }
-
+                        
                         // Wrap the chatLogs VBox in a ScrollPane
                         ScrollPane scrollPane = new ScrollPane(chatLogs);
                         scrollPane.setFitToWidth(true);
@@ -311,9 +343,15 @@ public class SecureP2PMessagingApp extends Application {
                                 // Dynamically add the new message to the chat log
                                 String senderName = "You";
                                 DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
-                                String formattedTimestamp = newMessage.getTimestamp().format(formatter);
+
+                                // Convert the Instant to ZonedDateTime using the system's default time zone
+                                String formattedTimestamp = newMessage.getTimestamp()
+                                                                      .atZone(ZoneId.systemDefault())
+                                                                      .format(formatter);
+                                
                                 Label messageLabel = new Label(senderName + " [" + formattedTimestamp + "]: " + newMessage.getContent());
                                 chatLogs.getChildren().add(messageLabel); // Update the chat log with the new message
+                                
 
                                 // Optionally, scroll to the bottom of the chat log
                                 scrollPane.setVvalue(1.0); // This ensures the scroll pane moves to the latest message

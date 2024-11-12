@@ -40,27 +40,25 @@
             <artifactId>aws-java-sdk-s3</artifactId>
             <version>1.12.300</version>
         </dependency>
+        <dependency>
+            <groupId>com.google.firebase</groupId>
+            <artifactId>firebase-admin</artifactId>
+            <version>8.1.0</version> 
+        </dependency>
     </dependencies>
 
     <build>
         <plugins>
-            <!-- JavaFX Maven Plugin -->
-            <plugin>
-                <groupId>org.openjfx</groupId>
-                <artifactId>javafx-maven-plugin</artifactId>
-                <version>0.0.8</version>
-                <configuration>
-                    <mainClass>com.psd.SecureP2PMessagingApp</mainClass>
-                </configuration>
-            </plugin>
-
-            <!-- Exec Maven Plugin -->
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>exec-maven-plugin</artifactId>
                 <version>3.5.0</version>
                 <configuration>
                     <mainClass>com.psd.SecureP2PMessagingApp</mainClass>
+                    <arguments>
+                        <argument>--add-opens</argument>
+                        <argument>java.base/java.time.chrono=ALL-UNNAMED</argument>
+                    </arguments>
                 </configuration>
             </plugin>
         </plugins>

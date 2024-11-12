@@ -1,6 +1,7 @@
 package com.psd.entities;
 
 import java.io.Serializable;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -25,7 +26,7 @@ public class Conversation implements Serializable {
     private final User participant1;
     private final User participant2;
     private final List<Message> messages;
-    private final LocalDateTime startTime;
+    private final Instant startTime;
 
     /**
      * Private constructor for a {@code Conversation} between two users with a generated ID.
@@ -40,7 +41,7 @@ public class Conversation implements Serializable {
         this.participant1 = participant1;
         this.participant2 = participant2;
         this.messages = new ArrayList<>();
-        this.startTime = LocalDateTime.now();
+        this.startTime = Instant.now();
     }
 
     /**
@@ -118,7 +119,7 @@ public class Conversation implements Serializable {
      *
      * @return The {@link LocalDateTime} representing the start time of the conversation.
      */
-    public LocalDateTime getStartTime() {
+    public Instant getStartTime() {
         return startTime;
     }
 }

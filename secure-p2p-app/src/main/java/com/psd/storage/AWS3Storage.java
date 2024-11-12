@@ -11,6 +11,7 @@ import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.amazonaws.services.s3.model.S3Object;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
 import com.psd.entities.Conversation;
+import com.psd.entities.User;
 import com.psd.services.SerializationService;
 
 import java.io.ByteArrayInputStream;
@@ -110,6 +111,31 @@ public class AWS3Storage {
         } while (result.isTruncated()); // Continues if the bucket has more than 1000 objects
         
         return keys;
+    }
+
+    public List<Conversation> getAllConversations(User user) {
+        List<Conversation> userConversations = new ArrayList<>();
+        List<String> allKeys = listAllConversationKeys(); // Get all stored keys
+
+        System.out.println("Retrieved all conversation keys from S3: " + allKeys); // Log keys
+
+        for (String key : allKeys) {
+            try {
+                Conversation conversation = loadConversation(key);
+                if (conversation != null) {
+                    System.out.println("Loaded conversation for key: " + key + " with participants: " +
+                            conversation.getParticipant1().getUserID() + " and " + conversation.getParticipant2().getUserID());
+
+                    if (conversation.isParticipant(user)) {
+                        System.out.println("Adding conversation for user: " + user.getUserID());
+                        userConversations.add(conversation);
+                    }
+                }
+            } catch (IOException e) {
+                System.err.println("Error loading conversation for key " + key + ": " + e.getMessage());
+            }
+        }
+        return userConversations;
     }
 
     /**

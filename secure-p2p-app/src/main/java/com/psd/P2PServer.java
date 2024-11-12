@@ -19,12 +19,14 @@
 package com.psd;
 
 import com.amazonaws.client.ClientHandler;
+import com.google.cloud.firestore.QueryDocumentSnapshot;
 import com.psd.entities.Conversation;
 import com.psd.entities.Message;
 import com.psd.entities.User;
 import com.psd.services.EncriptionService;
 import com.psd.services.SerializationService;
 import com.psd.storage.AWS3Storage;
+import com.psd.storage.FirebaseStorage;
 
 import javafx.application.Platform;
 import javafx.scene.control.Label;
@@ -36,12 +38,10 @@ import org.bouncycastle.jce.provider.BouncyCastleProvider;
 
 import java.io.*;
 import java.net.InetAddress;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.security.Security;
 import java.util.ArrayList;
-import java.util.Base64;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
 
 /**
  * Represents a P2P server that listens for incoming messages from peers.
@@ -59,6 +59,7 @@ public class P2PServer {
     private P2PClient client;
     private SSLServerSocketFactory sslServerSocketFactory;
     private static AWS3Storage aws3Storage;
+    private static FirebaseStorage firebaseStorage;
         
             static {
                 // Register the Bouncy Castle provider
@@ -77,6 +78,7 @@ public class P2PServer {
                 this.port = user.getPort();
                 this.mainMenuLayout = mainMenuLayout;
                 P2PServer.aws3Storage = new AWS3Storage();
+                P2PServer.firebaseStorage = new FirebaseStorage();
             new Thread(this::start).start(); // Start server on a new thread
         }
     
@@ -135,15 +137,27 @@ public class P2PServer {
                 // Create the unique conversation ID based on sender and receiver
                 String conversationId = Conversation.createConversation(sender, finalReceiver).getConversationId();
 
-                // Load existing conversation from S3 or create a new one if it doesn't exist
+                // Attempt to load the conversation from AWS S3
                 Conversation conversation = aws3Storage.loadConversation(conversationId);
+                
+                // If the conversation is not found in AWS S3, try loading it from Firebase
+                if (conversation == null) {
+                    conversation = firebaseStorage.loadConversation(conversationId);
+                    System.out.println("Loaded conversation from Firebase.");
+                }
+                
+                // If the conversation is still not found, create a new one
                 if (conversation == null) {
                     conversation = Conversation.createConversation(sender, finalReceiver);
+                    System.out.println("Created a new conversation with ID: " + conversationId);
                 }
 
-                // Add message to conversation and save updated conversation to S3
+                // Add message to conversation
                 conversation.addMessage(message);
+
+                // Save updated conversation to both AWS S3 and Firebase
                 aws3Storage.saveConversation(conversationId, conversation);
+                firebaseStorage.saveConversation(conversationId, conversation);
 
                 // Send message to the receiver
                 client.sendMessage(finalReceiver, SerializationService.serialize(message));
@@ -152,31 +166,6 @@ public class P2PServer {
                 System.err.println("Failed to send message: " + e.getMessage());
                 return false;
             }
-        }
-    
-        public List<Conversation> getAllConversations(User user) {
-            List<Conversation> userConversations = new ArrayList<>();
-            List<String> allKeys = aws3Storage.listAllConversationKeys(); // Get all stored keys
-
-            System.out.println("Retrieved all conversation keys from S3: " + allKeys); // Log keys
-
-            for (String key : allKeys) {
-                try {
-                    Conversation conversation = aws3Storage.loadConversation(key);
-                    if (conversation != null) {
-                        System.out.println("Loaded conversation for key: " + key + " with participants: " +
-                                conversation.getParticipant1().getUserID() + " and " + conversation.getParticipant2().getUserID());
-
-                        if (conversation.isParticipant(user)) {
-                            System.out.println("Adding conversation for user: " + user.getUserID());
-                            userConversations.add(conversation);
-                        }
-                    }
-                } catch (IOException e) {
-                    System.err.println("Error loading conversation for key " + key + ": " + e.getMessage());
-                }
-            }
-            return userConversations;
         }
     
         /**
@@ -247,14 +236,24 @@ public class P2PServer {
                 String conversationId = Conversation.createConversation(message.getSender(), message.getReceiver()).getConversationId();
 
                 try {
-                    // Load the conversation from S3 or create a new one if it doesn't exist
+                    // Attempt to load the conversation from AWS S3
                     Conversation conversation = aws3Storage.loadConversation(conversationId);
+
+                    // If the conversation is not found in AWS S3, try loading it from Firebase
                     if (conversation == null) {
-                        conversation = Conversation.createConversation(message.getSender(), message.getReceiver());
+                        conversation = firebaseStorage.loadConversation(conversationId);
+                        System.out.println("Loaded conversation from Firebase.");
                     }
 
-                    // Add the received message to the conversation and save it back to S3
+                    // If the conversation is still not found, create a new one
+                    if (conversation == null) {
+                        conversation = Conversation.createConversation(message.getSender(), message.getReceiver());
+                        System.out.println("Created a new conversation with ID: " + conversationId);
+                    }
+
+                    // Save the updated conversation to both AWS S3 and Firebase
                     aws3Storage.saveConversation(conversationId, conversation);
+                    firebaseStorage.saveConversation(conversationId, conversation);
 
                     // Update the UI to display the received message
                     Platform.runLater(() -> {

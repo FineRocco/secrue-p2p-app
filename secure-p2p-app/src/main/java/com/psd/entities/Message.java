@@ -1,6 +1,7 @@
 package com.psd.entities;
 
 import java.io.Serializable;
+import java.time.Instant;
 import java.time.LocalDateTime;
 
 /**
@@ -39,7 +40,7 @@ public class Message implements Serializable {
     private final String content;
 
     // The timestamp of when the message was created
-    private final LocalDateTime timestamp;
+    private final Instant timestamp;
 
     /**
      * Constructs a new {@code Message}.
@@ -54,7 +55,7 @@ public class Message implements Serializable {
         this.sender = sender;
         this.receiver = receiver;
         this.content = content;
-        this.timestamp = LocalDateTime.now();
+        this.timestamp = Instant.now();
     }
 
     /**
@@ -98,7 +99,7 @@ public class Message implements Serializable {
      *
      * @return The {@link LocalDateTime} timestamp of message creation.
      */
-    public LocalDateTime getTimestamp() {
+    public Instant getTimestamp() {
         return timestamp;
     }
 }
