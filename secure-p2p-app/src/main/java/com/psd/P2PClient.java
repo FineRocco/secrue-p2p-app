@@ -75,6 +75,8 @@ public class P2PClient {
             // Set up output stream for sending data
             DataOutputStream dataOut = new DataOutputStream(clientSocket.getOutputStream());
 
+            // Send the request type
+            dataOut.writeInt(1);
             // Send the number of user objects
             dataOut.writeInt(users.size());
 
@@ -90,6 +92,36 @@ public class P2PClient {
             System.out.println("Error connecting to central server: " + e.getMessage());
             e.printStackTrace();
             throw new RuntimeException("Failed to connect to central server", e);
+        }
+    }
+
+    /**
+     * Sends a user's serialized data (including interests) to the central server over SSL.
+     *
+     * @param userData The serialized user object in byte array format.
+     */
+    public void sendInterestsToCentralServer(byte[] userData) {
+        try {
+            sslSocketFactory = EncriptionService.initializeSSLContext(user.getUserID());
+            // Connect to central server over SSL
+            clientSocket = (SSLSocket) sslSocketFactory.createSocket(InetAddress.getLocalHost(), 8888);
+
+            // Set up output stream for sending data
+            DataOutputStream dataOut = new DataOutputStream(clientSocket.getOutputStream());
+
+            // Send the request type for interest registration or update
+            dataOut.writeInt(2); // Assuming 2 represents an interest update request type
+
+            // Send length and then the serialized user data
+            dataOut.writeInt(userData.length); // Send length of user data
+            dataOut.write(userData); // Send user data
+
+            dataOut.flush();
+
+        } catch (IOException e) {
+            System.out.println("Error sending interests to central server: " + e.getMessage());
+            e.printStackTrace();
+            throw new RuntimeException("Failed to send interests to central server", e);
         }
     }
 

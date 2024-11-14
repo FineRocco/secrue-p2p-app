@@ -18,8 +18,11 @@
  */
 package com.psd;
 
+import com.amazonaws.client.ClientHandler;
 import com.psd.entities.Conversation;
+import com.psd.entities.Group;
 import com.psd.entities.Message;
+import com.psd.entities.MessageGroup;
 import com.psd.entities.User;
 import com.psd.services.EncriptionService;
 import com.psd.services.SerializationService;
@@ -31,6 +34,8 @@ import javafx.application.Platform;
 import javafx.scene.control.Label;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.StackPane;
+
+import javax.crypto.SecretKey;
 import javax.net.ssl.*;
 
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
@@ -55,9 +60,10 @@ public class P2PServer {
     private BorderPane mainMenuLayout; // Reference to the main layout in the JavaFX UI
     private P2PClient client;
     private SSLServerSocketFactory sslServerSocketFactory;
-    private static AWS3Storage aws3Storage;
-    private static FirebaseStorage firebaseStorage;
-    private static AzureBlobStorage azureBlobStorage;
+    private static AWS3Storage aws3Storage = AWS3Storage.getInstance();
+    private static FirebaseStorage firebaseStorage = FirebaseStorage.getInstance();
+    private static AzureBlobStorage azureBlobStorage = AzureBlobStorage.getInstance();
+
         
             static {
                 // Register the Bouncy Castle provider
@@ -75,9 +81,8 @@ public class P2PServer {
                 this.user = user;
                 this.port = user.getPort();
                 this.mainMenuLayout = mainMenuLayout;
-                P2PServer.aws3Storage = new AWS3Storage();
                 P2PServer.firebaseStorage = new FirebaseStorage();
-                P2PServer.azureBlobStorage = new AzureBlobStorage();
+                this.client = new P2PClient(user); // Initialize client
             new Thread(this::start).start(); // Start server on a new thread
         }
     
@@ -95,8 +100,6 @@ public class P2PServer {
     
                 serverSocket = (SSLServerSocket) sslServerSocketFactory.createServerSocket(port, 50, InetAddress.getByName(user.getIpAddress()));
                 System.out.println("P2PServer: Created socket with this data: " + serverSocket.getInetAddress().getHostAddress() + ":" + serverSocket.getLocalPort());
-    
-                this.client = new P2PClient(user); // Initialize client to send messages
     
                 System.out.printf("P2PServer started at %s:%d%n", serverSocket.getInetAddress().getHostAddress(), port);
     
@@ -176,6 +179,70 @@ public class P2PServer {
                 return false;
             }
         }
+
+        public void sendInterestsToCentralServer(User user){
+            client.sendInterestsToCentralServer(SerializationService.serialize(user));
+        }
+
+        /**
+         * Sends a group message from the sender to all members of a specified group.
+         * If any group member's information is missing, it requests the details from the central server before sending.
+         *
+         * @param message The {@link MessageGroup} to be sent.
+         * @param sender The {@link User} sending the message.
+         * @param group The {@link Group} to which the message is being sent.
+         * @return {@code true} if the message is sent successfully to all members; {@code false} otherwise.
+         */
+        public boolean sendMessageGroup(MessageGroup message, User sender, Group group) {
+            boolean allMessagesSent = true;
+
+            try {
+                sslServerSocketFactory = EncriptionService.initializeServerSSLContext(user.getUserID());
+
+                // Add the message to the group's messages map
+                group.addMessage(message);
+
+
+                // Save the updated group to all storage backends
+                System.out.println("Saving group to AWS S3.");
+                aws3Storage.saveGroup(group.getGroupID(), group);
+                System.out.println("Saved group to Firebase.");
+                firebaseStorage.saveGroup(group.getGroupID(), group);
+                System.out.println("Saved group to Azure Blob.");
+                azureBlobStorage.saveGroup(group.getGroupID(), group);
+
+                // Send the message to each group member
+                for (User member : group.getMembers()) {
+                    // Skip the sender as they don't need to receive their own message
+                    if (member.equals(sender)) {
+                        continue;
+                    }
+
+                    // Ensure member details are up-to-date if missing
+                    if (member.getIpAddress() == null || member.getPort() == 0) {
+                        client.sendUserToCentralServer(List.of(SerializationService.serialize(sender), SerializationService.serialize(member)));
+                        synchronized (userAuxLock) {
+                            userAuxLock.wait(); // Wait for member details update
+                            member = userAux;
+                        }
+                    }
+
+                    // Send the message to the group member
+                    try {
+                        client.sendMessage(member, SerializationService.serialize(message));
+                    } catch (Exception e) {
+                        System.err.println("Failed to send message to group member: " + member.getUserID());
+                        allMessagesSent = false;
+                    }
+                }
+            } catch (Exception e) {
+                System.err.println("Failed to send group message: " + e.getMessage());
+                return false;
+            }
+
+            return allMessagesSent;
+        }
+
     
         /**
          * Handles communication with an individual client in a separate thread.
@@ -209,6 +276,8 @@ public class P2PServer {
                         handleMessage((Message) receivedObject);
                     } else if (receivedObject instanceof User) {
                         updateUserAux((User) receivedObject);
+                    }   else if (receivedObject instanceof User) {
+                        handleMessageGroup((MessageGroup) receivedObject);
                     }
                 } catch (Exception e) {
                     System.err.println("ClientHandler error: " + e.getMessage());
@@ -278,6 +347,57 @@ public class P2PServer {
                     });
                 } catch (IOException e) {
                     System.err.println("Error handling message: " + e.getMessage());
+                }
+            }
+
+            /**
+             * Processes a received group message, adding it to the appropriate group conversation and updating the UI.
+             *
+             * @param messageGroup The {@link MessageGroup} received from a peer.
+             * @param groupId The unique ID of the group to which the message belongs.
+             */
+            private void handleMessageGroup(MessageGroup messageGroup) {
+                System.out.printf("Received group message from %s:%d for group %s%n", 
+                                messageGroup.getSender().getIpAddress(), messageGroup.getSender().getPort(), messageGroup.getGroupId());
+
+                try {
+                    // Attempt to load the group conversation from AWS S3
+                    Group groupConversation = aws3Storage.loadGroup(messageGroup.getGroupId());
+
+                    // If the group conversation is not found in AWS S3, try loading it from Firebase
+                    if (groupConversation == null) {
+                        groupConversation = firebaseStorage.loadGroup(messageGroup.getGroupId());
+                        System.out.println("Loaded group conversation from Firebase.");
+                    }
+
+                    // If the group conversation is not found in Firebase, try loading it from Azure Blob
+                    if (groupConversation == null) {
+                        groupConversation = azureBlobStorage.loadGroup(messageGroup.getGroupId());
+                        System.out.println("Loaded group conversation from Azure Blob.");
+                    }
+
+                    // If the group conversation is still not found, print an error and exit
+                    if (groupConversation == null) {
+                        System.err.println("Group conversation with ID " + messageGroup.getGroupId() + " not found in any storage.");
+                        return;
+                    }
+
+                    // Save updated group conversation to all storage backends
+                    aws3Storage.saveGroup(messageGroup.getGroupId(), groupConversation);
+                    firebaseStorage.saveGroup(messageGroup.getGroupId(), groupConversation);
+                    azureBlobStorage.saveGroup(messageGroup.getGroupId(), groupConversation);
+
+                    // Use a final variable for the group topic to pass it into the lambda
+                    final String groupTopic = groupConversation.getGroupID();
+
+                    // Update the UI to display the received group message
+                    Platform.runLater(() -> {
+                        Label messageLabel = new Label("Received group message from: " + messageGroup.getSender().getUserID() + 
+                                                       " in group: " + groupTopic);
+                        mainMenuLayout.setCenter(new StackPane(messageLabel)); // Display message in UI
+                    });
+                } catch (IOException e) {
+                    System.err.println("Error handling group message: " + e.getMessage());
                 }
             }
 

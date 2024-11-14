@@ -50,12 +50,20 @@ public class SerializationService {
      * @throws RuntimeException if an {@link IOException} or {@link ClassNotFoundException} occurs.
      */
     public static Object deserialize(byte[] data) {
+        if (data == null || data.length == 0) {
+            System.out.println("Deserialization error: data is null or empty");
+            return null;
+        }
+    
         try (ByteArrayInputStream byteIn = new ByteArrayInputStream(data);
              ObjectInputStream in = new ObjectInputStream(byteIn)) {
             return in.readObject();
+        } catch (EOFException e) {
+            System.out.println("Deserialization error: unexpected end of data");
+            throw new RuntimeException("Deserialization failed: unexpected end of data", e);
         } catch (IOException | ClassNotFoundException e) {
             System.out.println("Deserialization error: " + e.getMessage());
-            throw new RuntimeException(e);
+            throw new RuntimeException("Deserialization failed", e);
         }
     }
 }

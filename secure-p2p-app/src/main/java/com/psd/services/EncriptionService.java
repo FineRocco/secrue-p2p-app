@@ -27,10 +27,22 @@ import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.cert.X509Certificate;
 import java.math.BigInteger;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.Date;
+import java.util.Objects;
+
 import javax.security.auth.x500.X500Principal;
 import java.security.KeyStore;
+import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
 import java.security.cert.Certificate;
+import java.security.cert.CertificateFactory;
+
+import javax.crypto.Cipher;
+import javax.crypto.KeyGenerator;
+import javax.crypto.SecretKey;
+import javax.crypto.spec.IvParameterSpec;
 import javax.net.ssl.*;
 import java.io.*;
 
@@ -265,4 +277,65 @@ public class EncriptionService {
             return null;
         }
     }
+
+    // ------------------ Group Methods ------------------ //
+
+    /**
+     * Creates an empty truststore for a specified group.
+     *
+     * @param trustStoreName The name of the truststore file.
+     */
+    public static void createGroupTruststore(String trustStoreName) {
+        try {
+            KeyStore truststore = KeyStore.getInstance("JKS");
+            truststore.load(null, null);  // Create an empty truststore
+
+            try (FileOutputStream fos = new FileOutputStream(STORE_DIRECTORY + trustStoreName + "-truststore.jks")) {
+                truststore.store(fos, "centralServer".toCharArray());
+                System.out.println("Created empty truststore: " + trustStoreName);
+            }
+        } catch (Exception e) {
+            System.out.println("Error creating truststore " + trustStoreName + ": " + e.getMessage());
+        }
+    }
+
+    /**
+     * Imports a user's certificate from their keystore into the specified group truststore.
+     *
+     * @param groupName The group name (football, ufc, basketball) to select the corresponding truststore.
+     * @param userId The user's ID to use as an alias in the truststore.
+     * @throws Exception if an error occurs during the import process.
+     */
+    public static void importUserCertificateToGroupTruststore(String groupName, String userId) {
+        String userKeystorePath = STORE_DIRECTORY + userId + "-keystore.jks";
+        String groupTruststorePath = STORE_DIRECTORY + groupName.toLowerCase() + "-truststore.jks";
+        
+        try (FileInputStream userKeystoreStream = new FileInputStream(userKeystorePath);
+             FileInputStream groupTruststoreStream = new FileInputStream(groupTruststorePath)) {
+
+            // Load user's keystore
+            KeyStore userKeystore = KeyStore.getInstance("JKS");
+            userKeystore.load(userKeystoreStream, "centralServer".toCharArray());
+
+            // Load the user's certificate from the keystore
+            Certificate userCertificate = userKeystore.getCertificate(userId);
+            Objects.requireNonNull(userCertificate, "User certificate not found in keystore.");
+
+            // Load the group truststore
+            KeyStore groupTruststore = KeyStore.getInstance("JKS");
+            groupTruststore.load(groupTruststoreStream, "centralServer".toCharArray());
+
+            // Add the user's certificate to the group truststore
+            groupTruststore.setCertificateEntry(userId, userCertificate);
+
+            // Save the updated truststore back to disk
+            try (FileOutputStream fos = new FileOutputStream(groupTruststorePath)) {
+                groupTruststore.store(fos, "centralServer".toCharArray());
+                System.out.println("Added user certificate to " + groupName + " truststore: " + userId);
+            }
+        } catch (Exception e) {
+            System.out.println("Error importing certificate for user " + userId + " to " + groupName + " truststore: " + e.getMessage());
+        }
+    }
+
 }

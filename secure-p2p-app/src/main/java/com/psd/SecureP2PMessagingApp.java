@@ -1,18 +1,23 @@
 package com.psd;
 
 import com.psd.entities.Conversation;
+import com.psd.entities.Group;
 import com.psd.entities.Message;
+import com.psd.entities.MessageGroup;
 import com.psd.entities.User;
+import com.psd.services.EncriptionService;
 import com.psd.storage.AWS3Storage;
 import com.psd.storage.AzureBlobStorage;
 import com.psd.storage.FirebaseStorage;
 
 import javafx.application.Application;
+import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
+import javafx.stage.Modality;
 import javafx.stage.Stage;
 
 import java.net.InetAddress;
@@ -35,9 +40,11 @@ public class SecureP2PMessagingApp extends Application {
 
     User currentUser;
     P2PServer userServer;
-    AWS3Storage aws3Storage = new AWS3Storage();
-    FirebaseStorage firebaseStorage = new FirebaseStorage();
-    AzureBlobStorage azureBlobStorage = new AzureBlobStorage();
+    private static AWS3Storage aws3Storage = AWS3Storage.getInstance();
+    private static FirebaseStorage firebaseStorage = FirebaseStorage.getInstance();
+    private static AzureBlobStorage azureBlobStorage = AzureBlobStorage.getInstance();
+    public List<Group> groups = new ArrayList<>();
+    public List<Conversation> conversations = new ArrayList<>();
 
     static {
         // Register the Bouncy Castle provider
@@ -68,6 +75,8 @@ public class SecureP2PMessagingApp extends Application {
         Button submitButton = new Button("Submit");
         Button sendDirectMessageButton = new Button("Send Direct Message");
         Button conversationsButton = new Button("Conversations");
+        Button interestsButton = new Button("Interests");
+        Button groupsButton = new Button("Groups");
         Button exitButton = new Button("Exit");
 
         // Layout
@@ -113,7 +122,7 @@ public class SecureP2PMessagingApp extends Application {
                 topBar.setStyle("-fx-padding: 10; -fx-background-color: #f0f0f0;");
 
                 // Create sidebar main menu
-                VBox sideBar = new VBox(10, conversationsButton, sendDirectMessageButton, exitButton);
+                VBox sideBar = new VBox(10, conversationsButton, sendDirectMessageButton, interestsButton, groupsButton, exitButton);
                 sideBar.setAlignment(Pos.TOP_LEFT);
                 sideBar.setStyle("-fx-background-color: #f5f5f5; -fx-padding: 10;");
 
@@ -136,6 +145,79 @@ public class SecureP2PMessagingApp extends Application {
                 throw new RuntimeException(ex);
             }
         });
+
+        interestsButton.setOnAction(e -> {
+            // Create a new Stage (popup window) for selecting interests
+            Stage interestsStage = new Stage();
+            interestsStage.initModality(Modality.APPLICATION_MODAL);
+            interestsStage.setTitle("Select Interests");
+        
+            // Set up checkboxes for interests
+            CheckBox footballCheckBox = new CheckBox("Football");
+            CheckBox ufcCheckBox = new CheckBox("UFC");
+            CheckBox basketballCheckBox = new CheckBox("Basketball");
+        
+            // Create a subscribe button
+            Button subscribeButton = new Button("Subscribe");
+            subscribeButton.setOnAction(subscribeEvent -> {
+                // Clear previous interests (if needed) before adding new ones
+                currentUser.setInterests(new ArrayList<>());
+        
+                // Add selected interests to currentUser's interests
+                if (footballCheckBox.isSelected()) currentUser.addInterest("football");
+                if (ufcCheckBox.isSelected()) currentUser.addInterest("ufc");
+                if (basketballCheckBox.isSelected()) currentUser.addInterest("basketball");
+        
+                // Display a message with selected interests or handle them as needed
+                System.out.println("Subscribed to: " + currentUser.getInterests());
+                try {
+                    // Attempt to retrieve all groups for the current user from AWS S3
+                    groups = aws3Storage.getAllGroups();
+                    System.out.println("Successfully retrieved groups from AWS S3.");
+                } catch (Exception awsException) {
+                    System.err.println("Error retrieving groups from AWS S3: " + awsException.getMessage());
+                    
+                    // Attempt to retrieve from Firebase if AWS S3 fails
+                    System.out.println("Attempting to retrieve groups from Firebase instead...");
+                    try {
+                        groups = firebaseStorage.getAllGroups();
+                        System.out.println("Successfully retrieved groups from Firebase.");
+                    } catch (Exception firebaseException) {
+                        System.err.println("Error retrieving groups from Firebase: " + firebaseException.getMessage());
+                        
+                        // If both AWS S3 and Firebase retrieval fail, attempt Azure Blob Storage
+                        System.out.println("Attempting to retrieve groups from Azure Blob Storage instead...");
+                        try {
+                            groups = azureBlobStorage.getAllGroups();
+                            System.out.println("Successfully retrieved groups from Azure Blob Storage.");
+                        } catch (Exception azureException) {
+                            System.err.println("Error retrieving groups from Azure Blob Storage: " + azureException.getMessage());
+                        }
+                    }
+                }
+                for (String interest : currentUser.getInterests()) {
+                    for (Group group : groups) {
+                        if (group.getGroupID().equals(interest)) {
+                            group.addMember(currentUser);
+                        }
+                    }
+                    EncriptionService.importUserCertificateToGroupTruststore(interest, currentUser.getUserID());
+                    userServer.sendInterestsToCentralServer(currentUser);
+                }
+                interestsStage.close();
+            });
+        
+            // Arrange checkboxes and subscribe button in a VBox layout
+            VBox interestsLayout = new VBox(10, footballCheckBox, ufcCheckBox, basketballCheckBox, subscribeButton);
+            interestsLayout.setPadding(new Insets(15));
+            interestsLayout.setStyle("-fx-background-color: #f9f9f9;");
+        
+            // Set the scene for the popup window and show it
+            Scene interestsScene = new Scene(interestsLayout, 200, 200);
+            interestsStage.setScene(interestsScene);
+            interestsStage.showAndWait();
+        });
+        
 
         // Set the button action to prepare a direct message
         sendDirectMessageButton.setOnAction(event -> {
@@ -176,7 +258,7 @@ public class SecureP2PMessagingApp extends Application {
                         User receiver = new User(receiverName, null, 0);
 
                         // Create a new message
-                        Message message = new Message("1", currentUser, receiver, messageContent);
+                        Message message = new Message(currentUser, receiver, messageContent);
                         boolean success = userServer.sendDirectMessage(message, currentUser, receiver);
 
                         Label confirmationLabel = new Label(success ? "Message sent to " + receiverName :
@@ -200,7 +282,6 @@ public class SecureP2PMessagingApp extends Application {
 
         // Handle conversationsButton click
         conversationsButton.setOnAction(event -> {
-            List<Conversation> conversations = new ArrayList<>();
             try {
                 // Attempt to retrieve all conversations for the current user from AWS S3
                 conversations = aws3Storage.getAllConversations(currentUser);
@@ -345,7 +426,7 @@ public class SecureP2PMessagingApp extends Application {
 
                             if (!messageContent.isEmpty()) {
                                 // Create and send the message
-                                Message newMessage = new Message("1", currentUser, otherParticipant, messageContent);
+                                Message newMessage = new Message(currentUser, otherParticipant, messageContent);
                                 System.out.println("Sending message: " + newMessage + " to " + otherParticipant.getUserID() + " from " + currentUser.getUserID());
                                 boolean success = userServer.sendDirectMessage(newMessage, currentUser, otherParticipant);
 
@@ -391,5 +472,185 @@ public class SecureP2PMessagingApp extends Application {
             System.exit(0); // Ensures the program is terminated properly
         });
 
+        // Handle groupsButton click
+        groupsButton.setOnAction(event -> {
+            try {
+                // Attempt to retrieve all groups for the current user from AWS S3
+                groups = aws3Storage.getAllGroupsWithMember(currentUser);
+                System.out.println("Successfully retrieved groups from AWS S3.");
+            } catch (Exception e) {
+                System.err.println("Error retrieving groups from AWS S3: " + e.getMessage());
+                
+                // Attempt to retrieve from Firebase if AWS S3 fails
+                System.out.println("Attempting to retrieve groups from Firebase instead...");
+                try {
+                    groups = firebaseStorage.getAllGroupsWithMember(currentUser);
+                    System.out.println("Successfully retrieved groups from Firebase.");
+                } catch (Exception firebaseException) {
+                    System.err.println("Error retrieving groups from Firebase: " + firebaseException.getMessage());
+                    
+                    // If both AWS S3 and Firebase retrieval fail, attempt Azure Blob Storage
+                    System.out.println("Attempting to retrieve groups from Azure Blob Storage instead...");
+                    try {
+                        groups = azureBlobStorage.getAllGroupsWithMember(currentUser);
+                        System.out.println("Successfully retrieved groups from Azure Blob Storage.");
+                    } catch (Exception azureException) {
+                        System.err.println("Error retrieving groups from Azure Blob Storage: " + azureException.getMessage());
+                    }
+                }
+            }
+            // List<String> interests = currentUser.getInterests().stream()
+            //                          .map(String::toLowerCase)
+            //                          .collect(Collectors.toList());
+            // List<Group> authorizedGroups = new ArrayList<>();
+
+            // // Add to authorizedGroups only the groups with groupID in the user's interests
+            // for (Group group : groups) {
+            //     System.out.println("Group retrived from storage: " + group);
+            //     if (interests.contains(group.getGroupID())) {
+            //         authorizedGroups.add(group);
+            //     }
+            // }
+
+            System.out.println("Found " + groups.size() + " authorized groups for " + currentUser.getUserID());
+
+            // Create a layout to display the groups
+            VBox groupsLayout = new VBox(10);
+            groupsLayout.setAlignment(Pos.CENTER);
+            groupsLayout.setStyle("-fx-background-color: #f5f5f5; -fx-padding: 30; -fx-border-color: #ccc; -fx-border-width: 1;");
+
+            if (groups.isEmpty()) {
+                // Display message if no groups found
+                Label noGroupsLabel = new Label("No groups found.");
+                groupsLayout.getChildren().add(noGroupsLabel);
+            } else {
+                // Label for selecting a group
+                Label selectGroupLabel = new Label("Select a group:");
+                selectGroupLabel.setStyle("-fx-font-size: 14; -fx-font-weight: bold;");
+
+                // List of groups
+                ComboBox<String> groupComboBox = new ComboBox<>();
+                groupComboBox.setPrefWidth(300);
+
+                Map<String, Group> groupMap = new HashMap<>();
+                for (int i = 0; i < groups.size(); i++) {
+                    Group group = groups.get(i);
+                    String groupLabel = (i + 1) + ". " + group.getGroupID();
+                    groupComboBox.getItems().add(groupLabel);
+                    groupMap.put(groupLabel, group);
+                }
+
+                Button viewGroupButton = new Button("View Group");
+                viewGroupButton.setStyle("-fx-font-size: 12; -fx-background-color: #4CAF50; -fx-text-fill: white; -fx-padding: 5 10 5 10;");
+
+                // Add elements to layout
+                groupsLayout.getChildren().addAll(selectGroupLabel, groupComboBox, viewGroupButton);
+
+                List<Group> finalGroups = groups; // Make groups effectively final
+                // Handle view group button click
+                viewGroupButton.setOnAction(viewEvent -> {
+                    System.out.print("Final groups: ");
+                    String selectedGroupLabel = groupComboBox.getValue();
+                    for (Group group : finalGroups) {
+                        System.out.println(group.getGroupID() + " ");
+                    }
+                    System.out.println("Selected group label: " + selectedGroupLabel);
+                    if (selectedGroupLabel != null) {
+                        // Find the selected group in the list of groups by matching the ID
+                        Group selectedGroup = finalGroups.stream()
+                            .filter(group -> selectedGroupLabel.contains(group.getGroupID()))
+                            .findFirst()
+                            .orElse(null);
+                        
+                        System.out.println("Selected group: " + selectedGroup.getGroupID());
+
+                        // Create a vertical layout to hold the group details
+                        VBox groupLayout = new VBox(10);
+                        groupLayout.setAlignment(Pos.CENTER);
+                        groupLayout.setStyle("-fx-background-color: #ffffff; -fx-padding: 20; -fx-border-color: #ccc; -fx-border-width: 1;");
+
+                        Label groupHeader = new Label("--- Group: " + selectedGroup.getGroupID() + " ---");
+                        groupHeader.setStyle("-fx-font-size: 12; -fx-font-weight: bold; -fx-padding: 10;");
+
+                        // Group messages area
+                        VBox groupMessages = new VBox(10);
+                        groupMessages.setStyle("-fx-background-color: #e0e0e0; -fx-padding: 10;");
+
+                        System.out.println("Group messages: " + selectedGroup.getMessages().values());
+
+                        for (MessageGroup msgGroup : selectedGroup.getMessages().values()) {
+                            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+                            String formattedTimestamp = msgGroup.getTimestamp().atZone(ZoneId.systemDefault()).format(formatter);
+                            String senderName = msgGroup.getSender().getUserID();
+
+                            // Display decrypted content in the label
+                            Label messageLabel = new Label(senderName + " [" + formattedTimestamp + "]: " + (msgGroup.getContent()));
+                            groupMessages.getChildren().add(messageLabel);
+                        }
+
+                        // Wrap the groupMessages VBox in a ScrollPane
+                        ScrollPane scrollPane = new ScrollPane(groupMessages);
+                        scrollPane.setFitToWidth(true);
+                        scrollPane.setPrefHeight(400); // Adjust the height as needed
+
+                        // New message input box
+                        HBox inputBox = new HBox(10);
+                        inputBox.setAlignment(Pos.CENTER_LEFT);
+
+                        TextArea newMessageInput = new TextArea();
+                        newMessageInput.setWrapText(true);
+                        newMessageInput.setPrefHeight(50);
+
+                        // Send message button
+                        Button sendMessageButton = new Button("Send Message");
+                        sendMessageButton.setStyle("-fx-background-color: #4CAF50; -fx-text-fill: white; -fx-font-size: 12; -fx-padding: 5 10 5 10;");
+
+                        inputBox.getChildren().addAll(newMessageInput, sendMessageButton);
+
+                        // Add the top group messages and bottom input box to the vertical layout
+                        groupLayout.getChildren().addAll(groupHeader, scrollPane, inputBox);
+
+                        // Set action for send message button
+                        sendMessageButton.setOnAction(sendEvent -> {
+                            String messageContent = newMessageInput.getText();
+
+                            if (!messageContent.isEmpty()) {
+                                // Create and send the message
+                                MessageGroup newMessage = new MessageGroup(currentUser, selectedGroup.getGroupID(), messageContent);
+                                System.out.println("Sending message: " + newMessage + " to group " + selectedGroup.getGroupID());
+                                boolean success = userServer.sendMessageGroup(newMessage, currentUser, selectedGroup);
+
+                                newMessageInput.clear();
+
+                                // Dynamically add the new message to the group messages
+                                String senderName = "You";
+                                DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+                                String formattedTimestamp = newMessage.getTimestamp().atZone(ZoneId.systemDefault()).format(formatter);
+                                Label messageLabel = new Label(senderName + " [" + formattedTimestamp + "]: " + newMessage.getContent());
+                                groupMessages.getChildren().add(messageLabel); // Update the chat log with the new message
+
+                                // Optionally, scroll to the bottom of the group messages
+                                scrollPane.setVvalue(1.0);
+                                if (!success) {
+                                    Label statusLabel = new Label("Failed to send message to group " + selectedGroup.getGroupID());
+                                    groupLayout.getChildren().add(statusLabel);
+                                }
+                            }
+                        });
+
+                        // Set the group layout as the center pane of the main layout
+                        mainMenuLayout.setCenter(groupLayout);
+                    } else {
+                        groupComboBox.setPromptText("Select a group");
+                    }
+                });
+            }
+
+            // Set the groups layout to the center of the main layout
+            mainMenuLayout.setCenter(groupsLayout);
+        });
+
     }
+
+
 }

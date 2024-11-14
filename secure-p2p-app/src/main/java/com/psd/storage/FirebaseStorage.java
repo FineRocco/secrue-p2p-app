@@ -11,6 +11,7 @@ import com.google.cloud.firestore.DocumentSnapshot;
 import com.google.cloud.firestore.QueryDocumentSnapshot;
 import com.google.cloud.firestore.QuerySnapshot;
 import com.psd.entities.Conversation;
+import com.psd.entities.Group;
 import com.psd.entities.User;
 
 import java.io.FileInputStream;
@@ -20,8 +21,8 @@ import java.util.List;
 import java.util.concurrent.ExecutionException;
 
 public class FirebaseStorage {
+    private static FirebaseStorage instance;  // Singleton instance
     private Firestore db = null; // Initialize to null by default
-    private final String collectionName = "conversations";
 
     /**
      * Constructor to initialize Firebase Firestore client.
@@ -46,6 +47,20 @@ public class FirebaseStorage {
     }
 
     /**
+     * Returns the singleton instance of FirebaseStorage.
+     *
+     * @return FirebaseStorage instance.
+     */
+    public static synchronized FirebaseStorage getInstance() {
+        if (instance == null) {
+            instance = new FirebaseStorage();
+        }
+        return instance;
+    }
+
+    // ------------------ Conversation Methods ------------------ //
+
+    /**
      * Saves a conversation to Firestore.
      *
      * @param conversationKey The unique key for the conversation.
@@ -55,7 +70,7 @@ public class FirebaseStorage {
     public void saveConversation(String conversationKey, Conversation conversation) throws IOException {
         try {
             // Store the conversation object directly in Firestore
-            db.collection(collectionName).document(conversationKey)
+            db.collection("conversations").document(conversationKey)
                     .set(conversation).get();
             System.out.println("Conversation saved with ID: " + conversationKey);
         } catch (InterruptedException | ExecutionException e) {
@@ -71,7 +86,7 @@ public class FirebaseStorage {
      * @throws IOException If an error occurs during deserialization.
      */
     public Conversation loadConversation(String conversationKey) throws IOException {
-        DocumentReference docRef = db.collection(collectionName).document(conversationKey);
+        DocumentReference docRef = db.collection("conversations").document(conversationKey);
         try {
             DocumentSnapshot document = docRef.get().get();
             if (document.exists()) {
@@ -93,7 +108,7 @@ public class FirebaseStorage {
     public List<String> listAllConversationKeys() {
         List<String> keys = new ArrayList<>();
         try {
-            CollectionReference conversations = db.collection(collectionName);
+            CollectionReference conversations = db.collection("conversations");
             QuerySnapshot snapshot = conversations.get().get();
             for (QueryDocumentSnapshot document : snapshot) {
                 keys.add(document.getId());
@@ -109,7 +124,7 @@ public class FirebaseStorage {
 
         try {
             // Retrieve all conversations in the "conversations" collection
-            List<QueryDocumentSnapshot> allDocuments = db.collection(collectionName).get().get().getDocuments();
+            List<QueryDocumentSnapshot> allDocuments = db.collection("conversations").get().get().getDocuments();
 
             System.out.println("Retrieved all conversation documents from Firebase: " + allDocuments.size()); // Log count
 
@@ -137,10 +152,102 @@ public class FirebaseStorage {
      */
     public void deleteConversation(String conversationKey) {
         try {
-            db.collection(collectionName).document(conversationKey).delete().get();
+            db.collection("conversations").document(conversationKey).delete().get();
             System.out.println("Conversation deleted with ID: " + conversationKey);
         } catch (InterruptedException | ExecutionException e) {
             System.err.println("Error deleting conversation: " + e.getMessage());
+        }
+    }
+
+     // ------------------ Group Methods ------------------ //
+
+     public void saveGroup(String groupKey, Group group) throws IOException {
+        try {
+            db.collection("groups")
+            .document(groupKey)
+            .set(group)
+            .get();
+            System.out.println("Group saved with ID: " + groupKey);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new IOException("Error saving group to Firebase: " + e.getMessage());
+        }
+    }
+
+    public Group loadGroup(String groupKey) throws IOException {
+        DocumentReference docRef = db.collection("groups").document(groupKey);
+        try {
+            DocumentSnapshot document = docRef.get().get();
+            if (document.exists()) {
+                return document.toObject(Group.class);
+            } else {
+                System.out.println("No group found with ID: " + groupKey);
+                return null;
+            }
+        } catch (InterruptedException | ExecutionException e) {
+            throw new IOException("Error loading group from Firebase: " + e.getMessage());
+        }
+    }
+
+    public List<String> listAllGroupIds() {
+        List<String> ids = new ArrayList<>();
+        try {
+            CollectionReference groups = db.collection("groups");
+            QuerySnapshot snapshot = groups.get().get();
+            for (QueryDocumentSnapshot document : snapshot) {
+                ids.add(document.getId());
+            }
+        } catch (InterruptedException | ExecutionException e) {
+            System.err.println("Error listing groups: " + e.getMessage());
+        }
+        return ids;
+    }
+    
+    /**
+     * Retrieves all groups where the specified user is a member.
+     *
+     * @param currentUser The user whose group memberships should be checked.
+     * @return A list of Group objects where the specified user is a member.
+     */
+    public List<Group> getAllGroupsWithMember(User currentUser) {
+        List<Group> userGroups = new ArrayList<>();
+        try {
+            List<QueryDocumentSnapshot> allDocuments = db.collection("groups").get().get().getDocuments();
+            System.out.println("Retrieved all group documents from Firebase: " + allDocuments.size());
+    
+            for (QueryDocumentSnapshot document : allDocuments) {
+                Group group = document.toObject(Group.class);
+                if (group != null && group.getMembers().contains(currentUser)) {
+                    userGroups.add(group);
+                }
+            }
+        } catch (InterruptedException | ExecutionException e) {
+            System.err.println("Error retrieving groups from Firebase: " + e.getMessage());
+        }
+        return userGroups;
+    }
+
+    public List<Group> getAllGroups() {
+        List<Group> groups = new ArrayList<>();
+        try {
+            List<QueryDocumentSnapshot> allDocuments = db.collection("groups").get().get().getDocuments();
+            System.out.println("Retrieved all group documents from Firebase: " + allDocuments.size());
+
+            for (QueryDocumentSnapshot document : allDocuments) {
+                Group group = document.toObject(Group.class);
+                groups.add(group);
+            }
+        } catch (InterruptedException | ExecutionException e) {
+            System.err.println("Error retrieving groups from Firebase: " + e.getMessage());
+        }
+        return groups;
+    }
+
+    public void deleteGroup(String groupId) {
+        try {
+            db.collection("groups").document(groupId).delete().get();
+            System.out.println("Group deleted with ID: " + groupId);
+        } catch (InterruptedException | ExecutionException e) {
+            System.err.println("Error deleting group: " + e.getMessage());
         }
     }
 }
