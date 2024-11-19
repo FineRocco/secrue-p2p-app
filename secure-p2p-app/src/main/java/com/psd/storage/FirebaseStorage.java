@@ -17,7 +17,9 @@ import com.psd.entities.User;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
 public class FirebaseStorage {
@@ -58,8 +60,6 @@ public class FirebaseStorage {
         return instance;
     }
 
-    // ------------------ Conversation Methods ------------------ //
-
     /**
      * Creates a user-specific collection in Firestore.
      *
@@ -81,6 +81,82 @@ public class FirebaseStorage {
             System.err.println("Error creating user collection: " + e.getMessage());
         }
     }
+
+    // ------------------ Key Share Methods ------------------ //
+
+    /**
+     * Saves a share of the key into the user's Firestore collection.
+     *
+     * @param userId   The ID of the user whose collection the share will be saved into.
+     * @param shareId  The unique identifier for the share.
+     * @param shareData The share data as a Base64-encoded string.
+     */
+    public void saveKeyShare(String userId, String shareId, String shareData) {
+        try {
+            String collectionName = "user_" + userId;
+            DocumentReference docRef = db.collection(collectionName).document("shares_" + shareId);
+
+            // Save the share data
+            Map<String, Object> share = new HashMap<>();
+            share.put("shareId", shareId);
+            share.put("data", shareData);
+            docRef.set(share).get();
+
+            System.out.println("Key share saved successfully: " + shareId + " for user: " + userId);
+        } catch (InterruptedException | ExecutionException e) {
+            System.err.println("Error saving key share: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Loads a share of the key from the user's Firestore collection.
+     *
+     * @param userId  The ID of the user whose collection the share will be loaded from.
+     * @param shareId The unique identifier for the share.
+     * @return The share data as a Base64-encoded string, or {@code null} if the share does not exist.
+     */
+    public String loadKeyShare(String userId, String shareId) {
+        try {
+            String collectionName = "user_" + userId;
+            DocumentReference docRef = db.collection(collectionName).document("shares_" + shareId);
+
+            // Retrieve the share data
+            DocumentSnapshot document = docRef.get().get();
+            if (document.exists()) {
+                return document.getString("data");
+            } else {
+                System.out.println("Share not found: " + shareId + " for user: " + userId);
+                return null;
+            }
+        } catch (InterruptedException | ExecutionException e) {
+            System.err.println("Error loading key share: " + e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Checks if a share exists in the user's Firestore collection.
+     *
+     * @param userId  The ID of the user whose collection will be checked.
+     * @param shareId The unique identifier for the share.
+     * @return {@code true} if the share exists, {@code false} otherwise.
+     */
+    public boolean checkShareExists(String userId, String shareId) {
+        try {
+            String collectionName = "user_" + userId;
+            DocumentReference docRef = db.collection(collectionName).document("shares_" + shareId);
+
+            // Check if the document exists
+            boolean exists = docRef.get().get().exists();
+            System.out.println("Checked share existence: " + shareId + " for user: " + userId + " - Exists: " + exists);
+            return exists;
+        } catch (InterruptedException | ExecutionException e) {
+            System.err.println("Error checking share existence: " + e.getMessage());
+            return false;
+        }
+    }
+
+    // ------------------ Conversation Methods ------------------ //
 
     /**
      * Saves a conversation to a user-specific Firestore collection.

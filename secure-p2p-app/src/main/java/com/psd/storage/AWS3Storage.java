@@ -25,7 +25,6 @@ import java.util.List;
 public class AWS3Storage {
     private static AWS3Storage instance;
     private final AmazonS3 s3Client;
-    private final String conversationBucketName = "psdconversations";
     private final String groupBucketName = "psdgroups";
 
     /**
@@ -73,6 +72,89 @@ public class AWS3Storage {
         System.out.println("Bucket created successfully: " + bucketName);
     }
 
+    /**
+     * Saves a share of the key into the user's bucket.
+     *
+     * @param userId The ID of the user whose bucket the share will be saved into.
+     * @param shareId The unique identifier for the share.
+     * @param shareData The share data as a Base64-encoded string.
+     */
+    public void saveKeyShare(String userId, String shareId, String shareData) {
+        try {
+            // Create the user-specific bucket if it doesn't exist
+            createBucketForUser(userId);
+
+            // Prepare the data for upload
+            byte[] shareBytes = shareData.getBytes();
+            InputStream inputStream = new ByteArrayInputStream(shareBytes);
+            ObjectMetadata metadata = new ObjectMetadata();
+            metadata.setContentLength(shareBytes.length);
+            metadata.setContentType("text/plain");
+
+            // Save the share to the user's bucket
+            String bucketName = "psd-" + userId.toLowerCase();
+            String objectKey = "shares/" + shareId; // Store shares in a 'shares' folder within the bucket
+            s3Client.putObject(bucketName, objectKey, inputStream, metadata);
+
+            System.out.println("Key share saved successfully: " + objectKey + " in bucket: " + bucketName);
+        } catch (Exception e) {
+            System.err.println("Error saving key share: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Checks if a share exists in the specified user's bucket.
+     *
+     * @param userId The ID of the user whose bucket will be checked.
+     * @param shareId The unique identifier for the share.
+     * @return {@code true} if the share exists, {@code false} otherwise.
+     */
+    public boolean checkShareExists(String userId, String shareId) {
+        try {
+            String bucketName = "psd-" + userId.toLowerCase();
+            String objectKey = "shares/" + shareId; // Look for shares in the 'shares' folder
+
+            // Check if the object exists in the bucket
+            boolean exists = s3Client.doesObjectExist(bucketName, objectKey);
+            System.out.println("Checked share existence: " + objectKey + " in bucket: " + bucketName + " - Exists: " + exists);
+            return exists;
+        } catch (Exception e) {
+            System.err.println("Error checking share existence: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Loads a share of the key from the specified user's bucket.
+     *
+     * @param userId The ID of the user whose bucket the share will be loaded from.
+     * @param shareId The unique identifier for the share.
+     * @return The share data as a Base64-encoded string, or {@code null} if the share does not exist.
+     * @throws IOException If an error occurs during the loading process.
+     */
+    public String loadKeyShare(String userId, String shareId) throws IOException {
+        try {
+            String bucketName = "psd-" + userId.toLowerCase();
+            String objectKey = "shares/" + shareId; // Shares are stored in the 'shares' folder
+
+            // Check if the object exists
+            if (!s3Client.doesObjectExist(bucketName, objectKey)) {
+                System.out.println("Share not found: " + objectKey + " in bucket: " + bucketName);
+                return null;
+            }
+
+            // Retrieve the object from the bucket
+            S3Object s3Object = s3Client.getObject(bucketName, objectKey);
+
+            // Read the object's content into a string
+            try (InputStream inputStream = s3Object.getObjectContent()) {
+                return new String(inputStream.readAllBytes());
+            }
+        } catch (Exception e) {
+            System.err.println("Error loading key share: " + e.getMessage());
+            throw new IOException("Error loading key share", e);
+        }
+    }
 
     // ------------------ Conversation Methods ------------------ //
 

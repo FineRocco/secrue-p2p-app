@@ -25,6 +25,7 @@ import com.psd.entities.Message;
 import com.psd.entities.MessageGroup;
 import com.psd.entities.User;
 import com.psd.services.EncriptionService;
+import com.psd.services.SecretSharingService;
 import com.psd.services.SerializationService;
 import com.psd.storage.AWS3Storage;
 import com.psd.storage.AzureBlobStorage;
@@ -35,7 +36,6 @@ import javafx.scene.control.Label;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.StackPane;
 
-import javax.crypto.SecretKey;
 import javax.net.ssl.*;
 
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
@@ -44,6 +44,7 @@ import java.io.*;
 import java.net.InetAddress;
 import java.security.Security;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Represents a P2P server that listens for incoming messages from peers.
@@ -55,6 +56,7 @@ public class P2PServer {
     private static User userAux;
     private final User user;
     private final int port; // The port on which the server listens
+    private String secretKey; // The secret key
     private SSLServerSocket serverSocket;
     private volatile boolean running = true; // Will be modified by different threads
     private BorderPane mainMenuLayout; // Reference to the main layout in the JavaFX UI
@@ -63,31 +65,35 @@ public class P2PServer {
     private static AWS3Storage aws3Storage = AWS3Storage.getInstance();
     private static FirebaseStorage firebaseStorage = FirebaseStorage.getInstance();
     private static AzureBlobStorage azureBlobStorage = AzureBlobStorage.getInstance();
+    // Generate and split the key
+    Map<Integer, String> shares;
 
         
-            static {
-                // Register the Bouncy Castle provider
-                Security.addProvider(new BouncyCastleProvider());
-            }
-        
-            /**
-             * Constructs a {@code P2PServer} for a specified user, with a reference to the JavaFX main menu layout.
-             * This constructor starts the server in a new thread.
-             *
-             * @param user The user for whom this server is created.
-             * @param mainMenuLayout The main menu layout in JavaFX UI.
-             */
-            public P2PServer(User user, BorderPane mainMenuLayout) {
-                this.user = user;
-                this.port = user.getPort();
-                this.mainMenuLayout = mainMenuLayout;
-                P2PServer.firebaseStorage = new FirebaseStorage();
-                this.client = new P2PClient(user); // Initialize client
-            new Thread(this::start).start(); // Start server on a new thread
+        static {
+            // Register the Bouncy Castle provider
+            Security.addProvider(new BouncyCastleProvider());
         }
+        
+        /**
+         * Constructs a {@code P2PServer} for a specified user, with a reference to the JavaFX main menu layout.
+         * This constructor starts the server in a new thread.
+         *
+         * @param user The user for whom this server is created.
+         * @param mainMenuLayout The main menu layout in JavaFX UI.
+         */
+        public P2PServer(User user, BorderPane mainMenuLayout) {
+            this.user = user;
+            this.port = user.getPort();
+            this.mainMenuLayout = mainMenuLayout;
+            this.shares = SecretSharingService.generateAndSplitKey();
+            this.client = new P2PClient(user); // Initialize client
+        new Thread(this::start).start(); // Start server on a new thread
+        }
+
+        
     
         /**
-         * Starts the P2P server, initializing SSL settings and listening for incoming connections.
+         * Starts the P2P server, initializing SSL settings and listening for incoming connections and sharing the secret between clouds
          */
         public void start() {
             try {
@@ -102,6 +108,8 @@ public class P2PServer {
                 System.out.println("P2PServer: Created socket with this data: " + serverSocket.getInetAddress().getHostAddress() + ":" + serverSocket.getLocalPort());
     
                 System.out.printf("P2PServer started at %s:%d%n", serverSocket.getInetAddress().getHostAddress(), port);
+
+                ensureKeySharesExist(user.getUserID()); // Ensure key shares exist in the clouds or creates it
     
                 // Listen for incoming connections
                 while (running) {
@@ -110,6 +118,67 @@ public class P2PServer {
                 }
             } catch (Exception e) {
                 System.err.println("Server error: " + e.getMessage());
+            }
+        }
+
+        /**
+         * Ensures that key shares exist in the clouds. If not, generates and distributes shares.
+         *
+         * @param userId The user ID to associate the shares with.
+         */
+        public void ensureKeySharesExist(String userId) {
+            try {
+                // Check if shares exist in the clouds
+                boolean awsShareExists = aws3Storage.checkShareExists(userId, "share1");
+                boolean firebaseShareExists = firebaseStorage.checkShareExists(userId, "share2");
+                boolean azureShareExists = azureBlobStorage.checkShareExists(userId, "share3");
+
+                // If all shares exist, do nothing
+                if (awsShareExists && firebaseShareExists && azureShareExists) {
+                    System.out.println("All shares exist. Reconstructing the key...");
+
+                    String share1 = aws3Storage.loadKeyShare(userId, "share1");
+                    String share2 = firebaseStorage.loadKeyShare(userId, "share2");
+                    String share3 = azureBlobStorage.loadKeyShare(userId, "share3");
+        
+                    // Combine the retrieved shares into a map
+                    Map<Integer, String> retrievedShares = Map.of(
+                        1, share1,
+                        2, share2,
+                        3, share3
+                    );
+        
+                    // Reconstruct the key
+                    this.secretKey = SecretSharingService.reconstructKey(retrievedShares);
+                    System.out.println("Reconstructed Secret Key: " + this.secretKey);
+                    return;
+                }
+
+                // Generate and split a new key if shares are missing
+                System.out.println("Generating new key and shares...");
+                Map<Integer, String> shares = SecretSharingService.generateAndSplitKey();
+
+                // Extract the original key (used for your secretKey field)
+                this.secretKey = SecretSharingService.reconstructKey(shares);
+                System.out.println("Generated Secret Key: " + this.secretKey);
+
+                // Distribute shares to the clouds
+                if (!awsShareExists) {
+                    aws3Storage.saveKeyShare(userId, "share1", shares.get(1));
+                    System.out.println("Saved share1 to AWS.");
+                }
+
+                if (!firebaseShareExists) {
+                    firebaseStorage.saveKeyShare(userId, "share2", shares.get(2));
+                    System.out.println("Saved share2 to Firebase.");
+                }
+
+                if (!azureShareExists) {
+                    azureBlobStorage.saveKeyShare(userId, "share3", shares.get(3));
+                    System.out.println("Saved share3 to Azure.");
+                }
+            } catch (Exception e) {
+                System.err.println("Error ensuring key shares: " + e.getMessage());
             }
         }
     

@@ -58,8 +58,6 @@ public class AzureBlobStorage {
         return instance;
     }
 
- // ------------------ Conversation Methods ------------------ //
-
     /**
      * Ensures a user-specific container exists.
      *
@@ -77,6 +75,91 @@ public class AzureBlobStorage {
 
         return userContainerClient;
     }
+
+    // ------------------ Key Share Methods ------------------ //
+
+    /**
+     * Saves a share of the key into the user's Azure Blob container.
+     *
+     * @param userId   The ID of the user whose container the share will be saved into.
+     * @param shareId  The unique identifier for the share.
+     * @param shareData The share data as a Base64-encoded string.
+     */
+    public void saveKeyShare(String userId, String shareId, String shareData) {
+        try {
+            // Get or create the user's container
+            BlobContainerClient userContainerClient = getUserContainerClient(userId);
+
+            // Save the share data to a blob
+            BlobClient blobClient = userContainerClient.getBlobClient("shares/" + shareId); // Store shares in a "shares" folder
+            byte[] shareBytes = shareData.getBytes();
+            InputStream inputStream = new ByteArrayInputStream(shareBytes);
+
+            blobClient.upload(inputStream, shareBytes.length, true);
+            System.out.println("Key share saved successfully: " + shareId + " for user: " + userId);
+        } catch (Exception e) {
+            System.err.println("Error saving key share: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Loads a share of the key from the user's Azure Blob container.
+     *
+     * @param userId  The ID of the user whose container the share will be loaded from.
+     * @param shareId The unique identifier for the share.
+     * @return The share data as a Base64-encoded string, or {@code null} if the share does not exist.
+     */
+    public String loadKeyShare(String userId, String shareId) {
+        try {
+            // Get the user's container
+            BlobContainerClient userContainerClient = getUserContainerClient(userId);
+
+            // Retrieve the blob containing the share data
+            BlobClient blobClient = userContainerClient.getBlobClient("shares/" + shareId);
+
+            if (!blobClient.exists()) {
+                System.out.println("Share not found: " + shareId + " for user: " + userId);
+                return null;
+            }
+
+            try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+                blobClient.downloadStream(outputStream);
+                String shareData = new String(outputStream.toByteArray());
+                System.out.println("Loaded key share: " + shareId + " for user: " + userId);
+                return shareData;
+            }
+        } catch (Exception e) {
+            System.err.println("Error loading key share: " + e.getMessage());
+            return null;
+        }
+    }
+
+
+    /**
+     * Checks if a share exists in the user's Azure Blob container.
+     *
+     * @param userId  The ID of the user whose container will be checked.
+     * @param shareId The unique identifier for the share.
+     * @return {@code true} if the share exists, {@code false} otherwise.
+     */
+    public boolean checkShareExists(String userId, String shareId) {
+        try {
+            // Get the user's container
+            BlobContainerClient userContainerClient = getUserContainerClient(userId);
+
+            // Check if the blob exists
+            BlobClient blobClient = userContainerClient.getBlobClient("shares/" + shareId);
+            boolean exists = blobClient.exists();
+
+            System.out.println("Checked share existence: " + shareId + " for user: " + userId + " - Exists: " + exists);
+            return exists;
+        } catch (Exception e) {
+            System.err.println("Error checking share existence: " + e.getMessage());
+            return false;
+        }
+    }
+
+    // ------------------ Conversation Methods ------------------ //
 
     /**
      * Saves a conversation to a user-specific container.
