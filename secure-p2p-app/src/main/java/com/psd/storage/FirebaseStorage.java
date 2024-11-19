@@ -61,72 +61,107 @@ public class FirebaseStorage {
     // ------------------ Conversation Methods ------------------ //
 
     /**
-     * Saves a conversation to Firestore.
+     * Creates a user-specific collection in Firestore.
      *
-     * @param conversationKey The unique key for the conversation.
-     * @param conversation The Conversation object to save.
-     * @throws IOException If an error occurs during serialization.
+     * @param userId The ID of the user for whom the collection is being created.
      */
-    public void saveConversation(String conversationKey, Conversation conversation) throws IOException {
+    public void createUserCollection(String userId) {
         try {
-            // Store the conversation object directly in Firestore
-            db.collection("conversations").document(conversationKey)
-                    .set(conversation).get();
-            System.out.println("Conversation saved with ID: " + conversationKey);
+            String collectionName = "user_" + userId;
+            CollectionReference collectionRef = db.collection(collectionName);
+
+            // Verify if the collection exists by attempting to fetch documents
+            QuerySnapshot snapshot = collectionRef.limit(1).get().get();
+            if (snapshot.isEmpty()) {
+                System.out.println("Created collection for user: " + userId);
+            } else {
+                System.out.println("Collection already exists for user: " + userId);
+            }
         } catch (InterruptedException | ExecutionException e) {
-            throw new IOException("Error saving conversation to Firebase: " + e.getMessage());
+            System.err.println("Error creating user collection: " + e.getMessage());
         }
     }
 
     /**
-     * Loads a conversation from Firestore.
+     * Saves a conversation to a user-specific Firestore collection.
      *
      * @param conversationKey The unique key for the conversation.
+     * @param conversation The Conversation object to save.
+     * @param userId The ID of the user for whom the conversation is being saved.
+     * @throws IOException If an error occurs during serialization.
+     */
+    public void saveConversation(String conversationKey, Conversation conversation, String userId) throws IOException {
+        try {
+            String collectionName = "user_" + userId;
+            db.collection(collectionName).document(conversationKey)
+                    .set(conversation).get();
+            System.out.println("Conversation saved with ID: " + conversationKey + " for user: " + userId);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new IOException("Error saving conversation to Firebase for user: " + userId + ": " + e.getMessage());
+        }
+    }
+
+    /**
+     * Loads a conversation from a user-specific Firestore collection.
+     *
+     * @param conversationKey The unique key for the conversation.
+     * @param userId The ID of the user for whom the conversation is being loaded.
      * @return The Conversation object retrieved from Firestore, or null if not found.
      * @throws IOException If an error occurs during deserialization.
      */
-    public Conversation loadConversation(String conversationKey) throws IOException {
-        DocumentReference docRef = db.collection("conversations").document(conversationKey);
+    public Conversation loadConversation(String conversationKey, String userId) throws IOException {
+        String collectionName = "user_" + userId;
+        DocumentReference docRef = db.collection(collectionName).document(conversationKey);
         try {
             DocumentSnapshot document = docRef.get().get();
             if (document.exists()) {
                 return document.toObject(Conversation.class);
             } else {
-                System.out.println("No conversation found with ID: " + conversationKey);
+                System.out.println("No conversation found with ID: " + conversationKey + " for user: " + userId);
                 return null;
             }
         } catch (InterruptedException | ExecutionException e) {
-            throw new IOException("Error loading conversation from Firebase: " + e.getMessage());
+            throw new IOException("Error loading conversation from Firebase for user: " + userId + ": " + e.getMessage());
         }
     }
 
     /**
-     * Lists all conversation keys (document IDs) in the Firestore collection.
+     * Lists all conversation keys (document IDs) in a user-specific Firestore collection.
      *
-     * @return A list of keys representing all conversations in the collection.
+     * @param userId The ID of the user whose conversation keys are being listed.
+     * @return A list of keys representing all conversations in the user's collection.
      */
-    public List<String> listAllConversationKeys() {
+    public List<String> listAllConversationKeys(String userId) {
         List<String> keys = new ArrayList<>();
+        String collectionName = "user_" + userId;
         try {
-            CollectionReference conversations = db.collection("conversations");
+            CollectionReference conversations = db.collection(collectionName);
             QuerySnapshot snapshot = conversations.get().get();
             for (QueryDocumentSnapshot document : snapshot) {
                 keys.add(document.getId());
             }
         } catch (InterruptedException | ExecutionException e) {
-            System.err.println("Error listing conversations: " + e.getMessage());
+            System.err.println("Error listing conversations for user " + userId + ": " + e.getMessage());
         }
         return keys;
     }
 
+    /**
+     * Retrieves all conversations for a specific user from their Firestore collection.
+     *
+     * @param user The user whose conversations are being retrieved.
+     * @return A list of Conversation objects for the specified user.
+     */
     public List<Conversation> getAllConversations(User user) {
         List<Conversation> userConversations = new ArrayList<>();
+        String userId = user.getUserID();
+        String collectionName = "user_" + userId;
 
         try {
-            // Retrieve all conversations in the "conversations" collection
-            List<QueryDocumentSnapshot> allDocuments = db.collection("conversations").get().get().getDocuments();
+            // Retrieve all conversations in the user's collection
+            List<QueryDocumentSnapshot> allDocuments = db.collection(collectionName).get().get().getDocuments();
 
-            System.out.println("Retrieved all conversation documents from Firebase: " + allDocuments.size()); // Log count
+            System.out.println("Retrieved all conversation documents from Firebase for user: " + userId);
 
             for (QueryDocumentSnapshot document : allDocuments) {
                 Conversation conversation = document.toObject(Conversation.class);
@@ -134,30 +169,33 @@ public class FirebaseStorage {
                         conversation.getParticipant1().getUserID() + " and " + conversation.getParticipant2().getUserID());
 
                 if (conversation.isParticipant(user)) {
-                    System.out.println("Adding conversation for user: " + user.getUserID());
+                    System.out.println("Adding conversation for user: " + userId);
                     userConversations.add(conversation);
                 }
             }
         } catch (InterruptedException | ExecutionException e) {
-            System.err.println("Error retrieving conversations from Firebase: " + e.getMessage());
+            System.err.println("Error retrieving conversations from Firebase for user: " + userId + ": " + e.getMessage());
         }
 
         return userConversations;
     }
 
     /**
-     * Deletes a conversation from Firestore.
+     * Deletes a conversation from a user-specific Firestore collection.
      *
      * @param conversationKey The unique key for the conversation.
+     * @param userId The ID of the user for whom the conversation is being deleted.
      */
-    public void deleteConversation(String conversationKey) {
+    public void deleteConversation(String conversationKey, String userId) {
+        String collectionName = "user_" + userId;
         try {
-            db.collection("conversations").document(conversationKey).delete().get();
-            System.out.println("Conversation deleted with ID: " + conversationKey);
+            db.collection(collectionName).document(conversationKey).delete().get();
+            System.out.println("Conversation deleted with ID: " + conversationKey + " for user: " + userId);
         } catch (InterruptedException | ExecutionException e) {
-            System.err.println("Error deleting conversation: " + e.getMessage());
+            System.err.println("Error deleting conversation for user " + userId + ": " + e.getMessage());
         }
     }
+
 
      // ------------------ Group Methods ------------------ //
 

@@ -144,13 +144,13 @@ public class P2PServer {
                 
                 // If the conversation is not found in AWS S3, try loading it from Firebase
                 if (conversation == null) {
-                    conversation = firebaseStorage.loadConversation(conversationId);
+                    conversation = firebaseStorage.loadConversation(conversationId, sender.getUserID());
                     System.out.println("Loaded conversation from Firebase.");
                 }
 
                 // If the conversation is not found in firebase, try loading it from AzureBlob
                 if (conversation == null) {
-                    conversation = azureBlobStorage.loadConversation(conversationId);
+                    conversation = azureBlobStorage.loadConversation(conversationId, sender.getUserID());
                     System.out.println("Loaded conversation from AzureBlob.");
                 }
                 
@@ -167,9 +167,9 @@ public class P2PServer {
                 System.out.println("Saving conversation to AWS S3.");
                 aws3Storage.saveConversation(conversationId, conversation, sender.getUserID());
                 System.out.println("Saved conversation to Firebase.");
-                firebaseStorage.saveConversation(conversationId, conversation);
+                firebaseStorage.saveConversation(conversationId, conversation, sender.getUserID());
                 System.out.println("Saved conversation to Azure Blob.");
-                azureBlobStorage.saveConversation(conversationId, conversation);
+                azureBlobStorage.saveConversation(conversationId, conversation, sender.getUserID());
 
                 // Send message to the receiver
                 client.sendMessage(finalReceiver, SerializationService.serialize(message));
@@ -321,13 +321,13 @@ public class P2PServer {
 
                     // If the conversation is not found in AWS S3, try loading it from Firebase
                     if (conversation == null) {
-                        conversation = firebaseStorage.loadConversation(conversationId);
+                        conversation = firebaseStorage.loadConversation(conversationId, sender.getUserID());
                         System.out.println("Loaded conversation from Firebase.");
                     }
 
                     // If the conversation is not found in firebase, try loading it from AzureBlob
                     if (conversation == null) {
-                        conversation = azureBlobStorage.loadConversation(conversationId);
+                        conversation = azureBlobStorage.loadConversation(conversationId, sender.getUserID());
                         System.out.println("Loaded conversation from AzureBlob.");
                     }
 
@@ -339,8 +339,8 @@ public class P2PServer {
 
                     // Save updated conversation to both AWS S3, Firebase and AzureBlob
                     aws3Storage.saveConversation(conversationId, conversation, sender.getUserID());
-                    firebaseStorage.saveConversation(conversationId, conversation);
-                    azureBlobStorage.saveConversation(conversationId, conversation);
+                    firebaseStorage.saveConversation(conversationId, conversation, sender.getUserID());
+                    azureBlobStorage.saveConversation(conversationId, conversation, sender.getUserID());
 
                     // Update the UI to display the received message
                     Platform.runLater(() -> {

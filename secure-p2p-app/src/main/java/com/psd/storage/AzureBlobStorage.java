@@ -5,6 +5,8 @@ import com.azure.identity.ClientSecretCredentialBuilder;
 import com.azure.storage.blob.BlobClient;
 import com.azure.storage.blob.BlobContainerClient;
 import com.azure.storage.blob.BlobContainerClientBuilder;
+import com.azure.storage.blob.BlobServiceClient;
+import com.azure.storage.blob.BlobServiceClientBuilder;
 import com.azure.storage.blob.models.BlobItem;
 import com.psd.entities.Conversation;
 import com.psd.entities.Group;
@@ -20,8 +22,8 @@ import java.util.List;
 
 public class AzureBlobStorage {
     private static AzureBlobStorage instance;
-    private final BlobContainerClient conversationContainerClient;
     private final BlobContainerClient groupContainerClient;
+    private final BlobServiceClient blobServiceClient;
 
     /**
      * Constructor to initialize Azure Blob Storage clients for both containers.
@@ -34,10 +36,9 @@ public class AzureBlobStorage {
                 .tenantId("0bfa8500-b1f2-4566-baf1-6f59370893e7")
                 .build();
 
-        // Initialize BlobContainerClient for conversations
-        this.conversationContainerClient = new BlobContainerClientBuilder()
+        // Initialize BlobServiceClient
+        this.blobServiceClient = new BlobServiceClientBuilder()
                 .endpoint("https://psd2024.blob.core.windows.net/")
-                .containerName("conversations")
                 .credential(clientSecretCredential)
                 .buildClient();
 
@@ -57,24 +58,65 @@ public class AzureBlobStorage {
         return instance;
     }
 
-    // ------------------ Conversation Methods ------------------ //
+ // ------------------ Conversation Methods ------------------ //
 
-    public void saveConversation(String conversationKey, Conversation conversation) throws IOException {
+    /**
+     * Ensures a user-specific container exists.
+     *
+     * @param userId The ID of the user for whom the container is created.
+     * @return The BlobContainerClient for the user's container.
+     */
+    public BlobContainerClient getUserContainerClient(String userId) {
+        String containerName = "user-" + userId.toLowerCase();
+        BlobContainerClient userContainerClient = blobServiceClient.getBlobContainerClient(containerName);
+
+        if (!userContainerClient.exists()) {
+            userContainerClient.create();
+            System.out.println("Created container: " + containerName);
+        }
+
+        return userContainerClient;
+    }
+
+    /**
+     * Saves a conversation to a user-specific container.
+     *
+     * @param conversationKey The unique key for the conversation.
+     * @param conversation The Conversation object to save.
+     * @param userId The ID of the user for whom the conversation is saved.
+     * @throws IOException If an error occurs during serialization.
+     */
+    public void saveConversation(String conversationKey, Conversation conversation, String userId) throws IOException {
+        BlobContainerClient userContainerClient = getUserContainerClient(userId);
+
         byte[] conversationBytes = SerializationService.serialize(conversation);
         InputStream inputStream = new ByteArrayInputStream(conversationBytes);
 
-        BlobClient blobClient = conversationContainerClient.getBlobClient(conversationKey);
+        BlobClient blobClient = userContainerClient.getBlobClient(conversationKey);
         blobClient.upload(inputStream, conversationBytes.length, true);
+
+        System.out.println("Saved conversation with key " + conversationKey + " in container for user " + userId);
     }
 
-    public Conversation loadConversation(String conversationKey) throws IOException {
-        BlobClient blobClient = conversationContainerClient.getBlobClient(conversationKey);
+    /**
+     * Loads a conversation from a user-specific container.
+     *
+     * @param conversationKey The unique key for the conversation.
+     * @param userId The ID of the user for whom the conversation is loaded.
+     * @return The Conversation object, or null if not found.
+     * @throws IOException If an error occurs during deserialization.
+     */
+    public Conversation loadConversation(String conversationKey, String userId) throws IOException {
+        BlobContainerClient userContainerClient = getUserContainerClient(userId);
+
+        BlobClient blobClient = userContainerClient.getBlobClient(conversationKey);
         if (!blobClient.exists()) {
+            System.out.println("Conversation with key " + conversationKey + " not found for user " + userId);
             return null;
         }
 
         try (InputStream inputStream = blobClient.openInputStream();
-             ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+            ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
             byte[] buffer = new byte[1024];
             int length;
             while ((length = inputStream.read(buffer)) != -1) {
@@ -85,21 +127,37 @@ public class AzureBlobStorage {
         }
     }
 
-    public List<String> listAllConversationKeys() {
+    /**
+     * Lists all conversation keys in a user-specific container.
+     *
+     * @param userId The ID of the user whose conversations are listed.
+     * @return A list of keys representing all conversations in the user's container.
+     */
+    public List<String> listAllConversationKeys(String userId) {
+        BlobContainerClient userContainerClient = getUserContainerClient(userId);
+
         List<String> keys = new ArrayList<>();
-        for (BlobItem blobItem : conversationContainerClient.listBlobs()) {
+        for (BlobItem blobItem : userContainerClient.listBlobs()) {
             keys.add(blobItem.getName());
         }
+
         return keys;
     }
 
+    /**
+     * Retrieves all conversations for a user from their container.
+     *
+     * @param user The user whose conversations are retrieved.
+     * @return A list of Conversation objects for the specified user.
+     */
     public List<Conversation> getAllConversations(User user) {
         List<Conversation> userConversations = new ArrayList<>();
-        List<String> allKeys = listAllConversationKeys();
+        String userId = user.getUserID();
+        List<String> allKeys = listAllConversationKeys(userId);
 
         for (String key : allKeys) {
             try {
-                Conversation conversation = loadConversation(key);
+                Conversation conversation = loadConversation(key, userId);
                 if (conversation != null && conversation.isParticipant(user)) {
                     userConversations.add(conversation);
                 }
@@ -110,9 +168,22 @@ public class AzureBlobStorage {
         return userConversations;
     }
 
-    public void deleteConversation(String conversationKey) {
-        BlobClient blobClient = conversationContainerClient.getBlobClient(conversationKey);
-        blobClient.delete();
+    /**
+     * Deletes a conversation from a user-specific container.
+     *
+     * @param conversationKey The unique key for the conversation.
+     * @param userId The ID of the user for whom the conversation is deleted.
+     */
+    public void deleteConversation(String conversationKey, String userId) {
+        BlobContainerClient userContainerClient = getUserContainerClient(userId);
+
+        BlobClient blobClient = userContainerClient.getBlobClient(conversationKey);
+        if (blobClient.exists()) {
+            blobClient.delete();
+            System.out.println("Deleted conversation with key " + conversationKey + " for user " + userId);
+        } else {
+            System.out.println("Conversation with key " + conversationKey + " does not exist for user " + userId);
+        }
     }
 
     // ------------------ Group Methods ------------------ //
