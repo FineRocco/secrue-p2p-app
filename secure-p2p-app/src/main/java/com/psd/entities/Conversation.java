@@ -2,61 +2,84 @@ package com.psd.entities;
 
 import java.io.Serializable;
 import java.time.Instant;
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * The {@code Conversation} class represents a conversation between two users 
- * in a peer-to-peer messaging application. It maintains the list of messages 
+ * in a peer-to-peer messaging application. It maintains a list of messages 
  * exchanged between the two users, as well as details about the participants and 
  * the start time of the conversation.
- *
- * <p>Main functionalities include:
- * <ul>
- *   <li>Adding messages to the conversation</li>
- *   <li>Retrieving the list of messages</li>
- *   <li>Checking if a user is a participant in the conversation</li>
- * </ul>
  */
 public class Conversation implements Serializable {
     private static final long serialVersionUID = 1L;
 
-    private final String conversationId;
-    private final User participant1;
-    private final User participant2;
-    private final List<Message> messages;
-    private final Instant startTime;
+    private String conversationId;
+    private User participant1;
+    private User participant2;
+    private List<Message> messages; // Changed to List<Message>
+    private String startTime; // Start time as ISO-8601 string
 
     /**
-     * Private constructor for a {@code Conversation} between two users with a generated ID.
-     * This initializes the start time and an empty list of messages.
-     *
-     * @param conversationId The unique ID of the conversation.
-     * @param participant1 The first user in the conversation.
-     * @param participant2 The second user in the conversation.
+     * No-argument constructor required for deserialization.
+     * Initializes fields with default values.
      */
-    private Conversation(String conversationId, User participant1, User participant2) {
-        this.conversationId = conversationId;
-        this.participant1 = participant1;
-        this.participant2 = participant2;
+    public Conversation() {
+        this.conversationId = null;
+        this.participant1 = null;
+        this.participant2 = null;
         this.messages = new ArrayList<>();
-        this.startTime = Instant.now();
+        this.startTime = Instant.now().toString(); // Set the current time as ISO-8601 string
     }
-
-    /**
-     * Static factory method to create a new {@code Conversation} between two users.
-     * Generates a unique conversation ID based on participant user IDs.
-     *
-     * @param participant1 The first user in the conversation.
-     * @param participant2 The second user in the conversation.
-     * @return A new {@code Conversation} object with a unique ID.
-     */
+    
     public static Conversation createConversation(User participant1, User participant2) {
         String conversationId = (participant1.getUserID().compareTo(participant2.getUserID()) < 0)
                 ? participant1.getUserID() + "-" + participant2.getUserID()
                 : participant2.getUserID() + "-" + participant1.getUserID();
-        return new Conversation(conversationId, participant1, participant2);
+    
+        Conversation conversation = new Conversation();
+        conversation.setConversationId(conversationId);
+        conversation.setParticipant1(participant1);
+        conversation.setParticipant2(participant2);
+        conversation.setStartTime(Instant.now().toString()); // Set the current time
+        conversation.setMessages(new ArrayList<>()); // Initialize an empty list of messages
+        return conversation;
+    }    
+
+    /**
+     * Handles deserialization of the `messages` field.
+     * Ensures that `messages` is always stored as a `List<Message>`.
+     *
+     * @param messagesData The deserialized messages value, which could be a Map or a List.
+     */
+    @SuppressWarnings("unchecked")
+    public void setMessages(Object messagesData) {
+        if (messagesData instanceof List) {
+            this.messages = (List<Message>) messagesData;
+        } else if (messagesData instanceof Map) {
+            this.messages = new ArrayList<>(((Map<String, Message>) messagesData).values());
+        } else {
+            System.err.println("Unsupported type for messages: " + messagesData.getClass());
+            this.messages = new ArrayList<>(); // Default to empty list in case of errors
+        }
+    }
+
+    /**
+     * Handles deserialization of the `startTime` field.
+     * Ensures that `startTime` is always stored as a `String`.
+     *
+     * @param startTime The deserialized startTime value, which could be a String or other type.
+     */
+    public void setStartTime(Object startTime) {
+        if (startTime instanceof String) {
+            this.startTime = (String) startTime;
+        } else if (startTime instanceof Instant) {
+            this.startTime = ((Instant) startTime).toString();
+        } else {
+            System.err.println("Unsupported type for startTime: " + startTime.getClass());
+            this.startTime = Instant.now().toString(); // Default to current time in case of errors
+        }
     }
 
     /**
@@ -65,7 +88,18 @@ public class Conversation implements Serializable {
      * @param message The {@link Message} to be added to the conversation.
      */
     public void addMessage(Message message) {
-        messages.add(message);
+        if (message != null) {
+            messages.add(message);
+        }
+    }
+
+    /**
+     * Returns all messages in the conversation as a list.
+     *
+     * @return A list of {@link Message} objects in this conversation.
+     */
+    public List<Message> getMessages() {
+        return messages;
     }
 
     /**
@@ -77,13 +111,8 @@ public class Conversation implements Serializable {
         return conversationId;
     }
 
-    /**
-     * Returns the list of all messages in the conversation.
-     *
-     * @return A list of {@link Message} objects exchanged in this conversation.
-     */
-    public List<Message> getMessages() {
-        return messages;
+    public void setConversationId(String conversationId) {
+        this.conversationId = conversationId;
     }
 
     /**
@@ -95,6 +124,10 @@ public class Conversation implements Serializable {
         return participant1;
     }
 
+    public void setParticipant1(User participant1) {
+        this.participant1 = participant1;
+    }
+
     /**
      * Returns the second participant in the conversation.
      *
@@ -102,6 +135,10 @@ public class Conversation implements Serializable {
      */
     public User getParticipant2() {
         return participant2;
+    }
+
+    public void setParticipant2(User participant2) {
+        this.participant2 = participant2;
     }
 
     /**
@@ -115,11 +152,11 @@ public class Conversation implements Serializable {
     }
 
     /**
-     * Returns the timestamp of when the conversation started.
+     * Returns the timestamp of when the conversation started as a String.
      *
-     * @return The {@link LocalDateTime} representing the start time of the conversation.
+     * @return The start time as a String.
      */
-    public Instant getStartTime() {
+    public String getStartTime() {
         return startTime;
     }
 }

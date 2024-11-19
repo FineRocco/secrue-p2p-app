@@ -123,12 +123,8 @@ public class CentralServer {
                     aws3Storage.saveGroup(groupID, newGroup);
                     firebaseStorage.saveGroup(groupID, newGroup);
                     azureBlobStorage.saveGroup(groupID, newGroup);
-
-                    // Set up the trustStore for the group
-                    EncriptionService.createGroupTruststore(groupID);
-                    System.out.println("Initialized group: " + groupID);
                     }
-                }
+             }
             } catch (IOException e) {
                 System.err.println("Error initializing group " + groupID + ": " + e.getMessage());
             }

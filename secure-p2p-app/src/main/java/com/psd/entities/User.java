@@ -12,10 +12,21 @@ import java.util.*;
 public class User implements Serializable {
     private static final long serialVersionUID = 1L;
 
-    private final String userID; // Unique identifier for the user
-    private final String ipAddress; // IP address in the P2P network
-    private final int port; // Port used for connections
+    private String userID; 
+    private String ipAddress; 
+    private int port; 
     private List<String> interests; // List of user's interests
+
+    /**
+     * No-argument constructor required for deserialization.
+     * Initializes fields with default values.
+     */
+    public User() {
+        this.userID = null;
+        this.ipAddress = null;
+        this.port = 0; // Default port value
+        this.interests = new ArrayList<>();
+    }
 
     /**
      * Constructs a new {@code User} with the specified ID, IP address, and port.

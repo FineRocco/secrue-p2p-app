@@ -51,23 +51,47 @@ public class AWS3Storage {
         return instance;
     }
 
+    /**
+     * Creates an S3 bucket with the given user ID as the bucket name.
+     *
+     * @param userId The user ID to use as the bucket name.
+     * @throws IllegalArgumentException if the bucket name is invalid.
+     */
+    public void createBucketForUser(String userId) {
+        if (userId == null || userId.isEmpty()) {
+            throw new IllegalArgumentException("User ID cannot be null or empty.");
+        }
+
+        String bucketName = "psd-" + userId.toLowerCase();
+
+        if (s3Client.doesBucketExistV2(bucketName)) {
+            System.out.println("Bucket already exists: " + bucketName);
+            return;
+        }
+
+        s3Client.createBucket(bucketName);
+        System.out.println("Bucket created successfully: " + bucketName);
+    }
+
+
     // ------------------ Conversation Methods ------------------ //
 
-    public void saveConversation(String conversationKey, Conversation conversation) throws IOException {
+    public void saveConversation(String conversationKey, Conversation conversation, String userId) throws IOException {
         byte[] conversationBytes = SerializationService.serialize(conversation);
         InputStream inputStream = new ByteArrayInputStream(conversationBytes);
         ObjectMetadata metadata = new ObjectMetadata();
         metadata.setContentLength(conversationBytes.length);
 
-        s3Client.putObject(conversationBucketName, conversationKey, inputStream, metadata);
+        s3Client.putObject("psd-" + userId, conversationKey, inputStream, metadata);
     }
 
-    public Conversation loadConversation(String conversationKey) throws IOException {
-        if (!s3Client.doesObjectExist(conversationBucketName, conversationKey)) {
+    public Conversation loadConversation(String conversationKey, String userId) throws IOException {
+        if (!s3Client.doesObjectExist("psd-" + userId, conversationKey)) {
+            System.out.println("Conversation not found for key: " + conversationKey);
             return null;
         }
 
-        S3Object s3Object = s3Client.getObject(conversationBucketName, conversationKey);
+        S3Object s3Object = s3Client.getObject("psd-" + userId, conversationKey);
         try (InputStream inputStream = s3Object.getObjectContent()) {
             ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
             byte[] buffer = new byte[1024];
@@ -81,9 +105,9 @@ public class AWS3Storage {
         }
     }
 
-    public List<String> listAllConversationKeys() {
+    public List<String> listAllConversationKeys(User user) {
         List<String> keys = new ArrayList<>();
-        ListObjectsV2Request req = new ListObjectsV2Request().withBucketName(conversationBucketName);
+        ListObjectsV2Request req = new ListObjectsV2Request().withBucketName("psd-" + user.getUserID());
         ListObjectsV2Result result;
 
         do {
@@ -99,11 +123,11 @@ public class AWS3Storage {
 
     public List<Conversation> getAllConversations(User user) {
         List<Conversation> userConversations = new ArrayList<>();
-        List<String> allIds = listAllConversationKeys();
+        List<String> allIds = listAllConversationKeys(user);
 
         for (String key : allIds) {
             try {
-                Conversation conversation = loadConversation(key);
+                Conversation conversation = loadConversation(key, user.getUserID());
                 if (conversation != null && conversation.isParticipant(user)) {
                     userConversations.add(conversation);
                 }
@@ -114,8 +138,8 @@ public class AWS3Storage {
         return userConversations;
     }
 
-    public void deleteConversation(String conversationKey) {
-        s3Client.deleteObject(conversationBucketName, conversationKey);
+    public void deleteConversation(String conversationKey, String userId) {
+        s3Client.deleteObject("psd-" + userId, conversationKey);
     }
 
     // ------------------ Group Methods ------------------ //

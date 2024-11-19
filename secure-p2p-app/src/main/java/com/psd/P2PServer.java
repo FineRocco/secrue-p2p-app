@@ -140,7 +140,7 @@ public class P2PServer {
                 String conversationId = Conversation.createConversation(sender, finalReceiver).getConversationId();
 
                 // Attempt to load the conversation from AWS S3
-                Conversation conversation = aws3Storage.loadConversation(conversationId);
+                Conversation conversation = aws3Storage.loadConversation(conversationId, sender.getUserID());
                 
                 // If the conversation is not found in AWS S3, try loading it from Firebase
                 if (conversation == null) {
@@ -165,7 +165,7 @@ public class P2PServer {
 
                 // Save updated conversation to both AWS S3, Firebase and AzureBlob
                 System.out.println("Saving conversation to AWS S3.");
-                aws3Storage.saveConversation(conversationId, conversation);
+                aws3Storage.saveConversation(conversationId, conversation, sender.getUserID());
                 System.out.println("Saved conversation to Firebase.");
                 firebaseStorage.saveConversation(conversationId, conversation);
                 System.out.println("Saved conversation to Azure Blob.");
@@ -308,14 +308,16 @@ public class P2PServer {
              * @param message The {@link Message} received from a peer.
              */
             private void handleMessage(Message message) {
-                System.out.printf("Received message from %s:%d%n", message.getSender().getIpAddress(), message.getSender().getPort());
+                User sender = message.getSender();
+                User receiver = message.getReceiver();
+                System.out.printf("Received message from %s:%d%n", sender.getIpAddress(), sender.getPort());
 
                 // Create the unique conversation ID based on sender and receiver
-                String conversationId = Conversation.createConversation(message.getSender(), message.getReceiver()).getConversationId();
+                String conversationId = Conversation.createConversation(sender, receiver).getConversationId();
 
                 try {
                     // Attempt to load the conversation from AWS S3
-                    Conversation conversation = aws3Storage.loadConversation(conversationId);
+                    Conversation conversation = aws3Storage.loadConversation(conversationId, sender.getUserID());
 
                     // If the conversation is not found in AWS S3, try loading it from Firebase
                     if (conversation == null) {
@@ -331,12 +333,12 @@ public class P2PServer {
 
                     // If the conversation is still not found, create a new one
                     if (conversation == null) {
-                        conversation = Conversation.createConversation(message.getSender(), message.getReceiver());
+                        conversation = Conversation.createConversation(sender, message.getReceiver());
                         System.out.println("Created a new conversation with ID: " + conversationId);
                     }
 
                     // Save updated conversation to both AWS S3, Firebase and AzureBlob
-                    aws3Storage.saveConversation(conversationId, conversation);
+                    aws3Storage.saveConversation(conversationId, conversation, sender.getUserID());
                     firebaseStorage.saveConversation(conversationId, conversation);
                     azureBlobStorage.saveConversation(conversationId, conversation);
 

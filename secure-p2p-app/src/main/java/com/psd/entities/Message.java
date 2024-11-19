@@ -2,7 +2,6 @@ package com.psd.entities;
 
 import java.io.Serializable;
 import java.time.Instant;
-import java.time.LocalDateTime;
 import java.util.UUID;
 
 /**
@@ -10,53 +9,52 @@ import java.util.UUID;
  * peer-to-peer (P2P) network. Each message has unique identifiers for tracking, 
  * details about the sender and receiver, the message content, and a timestamp 
  * indicating when it was created.
- *
- * <p>Main functionalities include:
- * <ul>
- *   <li>Storing sender and receiver information</li>
- *   <li>Storing the message content and creation timestamp</li>
- *   <li>Retrieving unique identifiers for tracking the message</li>
- * </ul>
- *
- * <p>Example usage:
- * <pre>
- *     Message message = new Message("msg001", senderUser, receiverUser, "Hello, world!");
- *     String content = message.getContent();
- * </pre>
  */
 public class Message implements Serializable {
     // Define a fixed serialVersionUID
     private static final long serialVersionUID = 1L;
 
     // Unique identifier for the message
-    private final String messageID;
+    private String messageID;
 
     // User who sent the message
-    private final User sender;
+    private User sender;
 
     // User who will receive the message
-    private final User receiver;
+    private User receiver;
 
     // The actual (plain) content of the message
-    private final String content;
+    private String content;
 
     // The timestamp of when the message was created
-    private final Instant timestamp;
+    private String timestamp;
 
     /**
-     * Constructs a new {@code Message}.
+     * No-argument constructor required for deserialization.
+     * Initializes fields with default values.
+     */
+    public Message() {  
+
+    }
+
+     /**
+     * Factory method to create a new {@code Message} with a specific timestamp.
      *
-     * @param messageID A unique identifier for the message.
      * @param sender    The {@link User} sending the message.
      * @param receiver  The {@link User} receiving the message.
      * @param content   The plain-text content of the message.
+     * @param timestamp The {@link Instant} timestamp of when the message was created.
+     * @return A new {@code Message} instance with the specified timestamp.
      */
-      public Message(User sender, User receiver, String content) {
-        this.messageID = UUID.randomUUID().toString();
-        this.sender = sender;
-        this.receiver = receiver;
-        this.content = content;
-        this.timestamp = Instant.now();
+    public static Message createMessage(User sender, User receiver, String content) {
+        Message message = new Message();
+        message.messageID = UUID.randomUUID().toString();
+        message.sender = sender;
+        message.receiver = receiver;
+        message.content = content;
+        String timestampString = Instant.now().toString();
+        message.timestamp = timestampString;
+        return message;
     }
 
     /**
@@ -98,9 +96,9 @@ public class Message implements Serializable {
     /**
      * Returns the timestamp when the message was created.
      *
-     * @return The {@link LocalDateTime} timestamp of message creation.
+     * @return The {@link Instant} timestamp of message creation.
      */
-    public Instant getTimestamp() {
+    public String getTimestamp() {
         return timestamp;
     }
 }

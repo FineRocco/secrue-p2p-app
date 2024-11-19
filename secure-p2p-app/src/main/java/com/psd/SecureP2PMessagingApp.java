@@ -23,6 +23,7 @@ import javafx.stage.Stage;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.security.Security;
+import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -112,6 +113,8 @@ public class SecureP2PMessagingApp extends Application {
 
                 currentUser = new User(userName, ipAddress, userPort);
                 userServer = new P2PServer(currentUser, mainMenuLayout);
+
+                aws3Storage.createBucketForUser(currentUser.getUserID());
 
                 Label userDetailsLabel = new Label("User: " + userName + ", IP = " + ipAddress + ":" + userPort);
                 userDetailsLabel.setTextFill(Color.DARKGRAY);
@@ -258,7 +261,7 @@ public class SecureP2PMessagingApp extends Application {
                         User receiver = new User(receiverName, null, 0);
 
                         // Create a new message
-                        Message message = new Message(currentUser, receiver, messageContent);
+                        Message message = Message.createMessage(currentUser, receiver, messageContent);
                         boolean success = userServer.sendDirectMessage(message, currentUser, receiver);
 
                         Label confirmationLabel = new Label(success ? "Message sent to " + receiverName :
@@ -313,11 +316,15 @@ public class SecureP2PMessagingApp extends Application {
             for (Conversation conv : conversations) {
                 System.out.println("Conversation: " + conv.getConversationId() + " between " +
                         conv.getParticipant1().getUserID() + " and " + conv.getParticipant2().getUserID());
-                for (Message msg : conv.getMessages()) {
+                
+                // Iterate over all messages in the conversation
+                for (Message msg : conv.getMessages()) { // Use getMessages() directly
                     System.out.println("Message: " + msg.getContent());
                 }
+                
                 System.out.println("----------------------------------------------------");
             }
+               
             //DEBUGGING
 
             // Create a layout to display the conversations
@@ -346,10 +353,11 @@ public class SecureP2PMessagingApp extends Application {
 
                     DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
+                    Instant instant = Instant.parse(conversation.getStartTime());
                     // Convert the Instant to ZonedDateTime using the system's default time zone
-                    String formattedTimestamp = conversation.getStartTime()
-                                                            .atZone(ZoneId.systemDefault())
-                                                            .format(formatter);
+                    String formattedTimestamp = instant
+                                                    .atZone(ZoneId.systemDefault())
+                                                    .format(formatter);
                     
                     String conversationLabel = (i + 1) + ". Conversation with " + participant.getUserID() +
                                               " (Started on " + formattedTimestamp + ")";                    
@@ -385,14 +393,17 @@ public class SecureP2PMessagingApp extends Application {
                         VBox chatLogs = new VBox(10);
                         chatLogs.setStyle("-fx-background-color: #e0e0e0; -fx-padding: 10;");
 
-                        for (Message msg : selectedConvo.getMessages()) {
+                        for (Message msg : selectedConvo.getMessages()) { // Use getMessages() directly
                             DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
-                        
+                            
+                            // Parse the timestamp string back into an Instant
+                            Instant instant = Instant.parse(msg.getTimestamp());
+                            
                             // Convert the Instant to ZonedDateTime using the system's default time zone
-                            String formattedTimestamp = msg.getTimestamp()
+                            String formattedTimestamp = instant
                                                             .atZone(ZoneId.systemDefault())
                                                             .format(formatter);
-                        
+                            
                             String senderName = msg.getSender().equals(currentUser) ? "You" : otherParticipant.getUserID();
                             Label messageLabel = new Label(senderName + " [" + formattedTimestamp + "]: " + msg.getContent());
                             chatLogs.getChildren().add(messageLabel);
@@ -426,7 +437,7 @@ public class SecureP2PMessagingApp extends Application {
 
                             if (!messageContent.isEmpty()) {
                                 // Create and send the message
-                                Message newMessage = new Message(currentUser, otherParticipant, messageContent);
+                                Message newMessage = Message.createMessage(currentUser, otherParticipant, messageContent);
                                 System.out.println("Sending message: " + newMessage + " to " + otherParticipant.getUserID() + " from " + currentUser.getUserID());
                                 boolean success = userServer.sendDirectMessage(newMessage, currentUser, otherParticipant);
 
@@ -436,10 +447,13 @@ public class SecureP2PMessagingApp extends Application {
                                 String senderName = "You";
                                 DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
+                                // Parse the timestamp string back into an Instant
+                                Instant instant = Instant.parse(newMessage.getTimestamp());
+
                                 // Convert the Instant to ZonedDateTime using the system's default time zone
-                                String formattedTimestamp = newMessage.getTimestamp()
-                                                                      .atZone(ZoneId.systemDefault())
-                                                                      .format(formatter);
+                                String formattedTimestamp = instant
+                                                            .atZone(ZoneId.systemDefault())
+                                                            .format(formatter);
                                 
                                 Label messageLabel = new Label(senderName + " [" + formattedTimestamp + "]: " + newMessage.getContent());
                                 chatLogs.getChildren().add(messageLabel); // Update the chat log with the new message
