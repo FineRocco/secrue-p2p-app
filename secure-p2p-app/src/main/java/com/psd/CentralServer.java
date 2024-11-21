@@ -25,7 +25,7 @@ package com.psd;
 
 import com.psd.entities.Group;
 import com.psd.entities.User;
-import com.psd.services.EncriptionService;
+import com.psd.services.SSLService;
 import com.psd.services.SerializationService;
 import com.psd.storage.AWS3Storage;
 import com.psd.storage.AzureBlobStorage;
@@ -64,10 +64,10 @@ public class CentralServer {
 
     public static void main(String[] args) {
         // Load SSL context
-        EncriptionService.initializeServerKeys("server");
-        EncriptionService.initializeServerTruststore();
+        SSLService.initializeServerKeys("server");
+        SSLService.initializeServerTruststore();
         initializeSSLGroups();
-        sslServerSocketFactory = EncriptionService.initializeServerSSLContext("server");
+        sslServerSocketFactory = SSLService.initializeServerSSLContext("server");
         if (sslServerSocketFactory == null) {
             System.out.println("Failed to create SSL server socket factory.");
             return;
@@ -182,7 +182,7 @@ public class CentralServer {
      */
     public static void sendUser(User toSend, User requestedUser) {
         try {
-            sslSocketFactory = EncriptionService.initializeSSLContext(requestedUser.getUserID());
+            sslSocketFactory = SSLService.initializeSSLContext(requestedUser.getUserID());
             SSLSocket clientSocket = (SSLSocket) sslSocketFactory.createSocket(toSend.getIpAddress(), toSend.getPort());
 
             DataOutputStream dataOut = new DataOutputStream(clientSocket.getOutputStream());

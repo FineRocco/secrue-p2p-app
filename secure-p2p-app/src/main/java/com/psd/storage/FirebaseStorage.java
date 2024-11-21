@@ -156,80 +156,116 @@ public class FirebaseStorage {
         }
     }
 
-    // ------------------ Conversation Methods ------------------ //
+    // ------------------ Encrypted Conversation Methods ------------------ //
 
     /**
-     * Saves a conversation to a user-specific Firestore collection.
+     * Saves an encrypted conversation to a user-specific Firestore collection.
      *
      * @param conversationKey The unique key for the conversation.
-     * @param conversation The Conversation object to save.
+     * @param encryptedConversation The encrypted conversation string to save.
      * @param userId The ID of the user for whom the conversation is being saved.
-     * @throws IOException If an error occurs during serialization.
+     * @throws IOException If an error occurs during saving.
      */
-    public void saveConversation(String conversationKey, Conversation conversation, String userId) throws IOException {
+    public void saveEncryptedConversation(String conversationKey, String encryptedConversation, String userId) throws IOException {
         try {
             String collectionName = "user_" + userId;
+            Map<String, String> data = Map.of("encryptedData", encryptedConversation);
+
             db.collection(collectionName).document(conversationKey)
-                    .set(conversation).get();
-            System.out.println("Conversation saved with ID: " + conversationKey + " for user: " + userId);
+                    .set(data).get();
+
+            System.out.println("Encrypted conversation saved with ID: " + conversationKey + " for user: " + userId);
         } catch (InterruptedException | ExecutionException e) {
-            throw new IOException("Error saving conversation to Firebase for user: " + userId + ": " + e.getMessage());
+            throw new IOException("Error saving encrypted conversation to Firebase for user: " + userId + ": " + e.getMessage());
         }
     }
 
     /**
-     * Loads a conversation from a user-specific Firestore collection.
+     * Loads an encrypted conversation from a user-specific Firestore collection.
      *
      * @param conversationKey The unique key for the conversation.
      * @param userId The ID of the user for whom the conversation is being loaded.
-     * @return The Conversation object retrieved from Firestore, or null if not found.
-     * @throws IOException If an error occurs during deserialization.
+     * @return The encrypted conversation as a string, or null if not found.
+     * @throws IOException If an error occurs during loading.
      */
-    public Conversation loadConversation(String conversationKey, String userId) throws IOException {
+    public String loadEncryptedConversation(String conversationKey, String userId) throws IOException {
         String collectionName = "user_" + userId;
         DocumentReference docRef = db.collection(collectionName).document(conversationKey);
+
         try {
             DocumentSnapshot document = docRef.get().get();
             if (document.exists()) {
-                return document.toObject(Conversation.class);
+                return document.getString("encryptedData");
             } else {
-                System.out.println("No conversation found with ID: " + conversationKey + " for user: " + userId);
+                System.out.println("No encrypted conversation found with ID: " + conversationKey + " for user: " + userId);
                 return null;
             }
         } catch (InterruptedException | ExecutionException e) {
-            throw new IOException("Error loading conversation from Firebase for user: " + userId + ": " + e.getMessage());
+            throw new IOException("Error loading encrypted conversation from Firebase for user: " + userId + ": " + e.getMessage());
         }
     }
 
     /**
-     * Lists all conversation keys (document IDs) in a user-specific Firestore collection.
+     * Lists all encrypted conversations (ID and encrypted data) in a user-specific Firestore collection.
      *
-     * @param userId The ID of the user whose conversation keys are being listed.
-     * @return A list of keys representing all conversations in the user's collection.
+     * @param userId The ID of the user whose conversations are listed.
+     * @return A map where the key is the conversation ID and the value is the encrypted data as a string.
      */
-    public List<String> listAllConversationKeys(String userId) {
-        List<String> keys = new ArrayList<>();
+    public Map<String, String> listAllEncryptedConversations(String userId) {
+        Map<String, String> encryptedConversations = new HashMap<>();
         String collectionName = "user_" + userId;
+
         try {
             CollectionReference conversations = db.collection(collectionName);
             QuerySnapshot snapshot = conversations.get().get();
+
             for (QueryDocumentSnapshot document : snapshot) {
-                keys.add(document.getId());
+                String conversationId = document.getId();
+
+                // Skip conversation IDs that start with "shares_"
+                if (conversationId.startsWith("shares_")) {
+                    continue;
+                }
+
+                String encryptedData = document.getString("encryptedData"); // Assume "encryptedData" is the field name
+                if (encryptedData != null) {
+                    encryptedConversations.put(conversationId, encryptedData);
+                } else {
+                    System.err.println("Missing encrypted data for conversation ID: " + conversationId);
+                }
             }
         } catch (InterruptedException | ExecutionException e) {
-            System.err.println("Error listing conversations for user " + userId + ": " + e.getMessage());
+            System.err.println("Error listing encrypted conversations for user " + userId + ": " + e.getMessage());
         }
-        return keys;
+
+        return encryptedConversations;
     }
 
     /**
-     * Retrieves all conversations for a specific user from their Firestore collection.
+     * Deletes an encrypted conversation from a user-specific Firestore collection.
+     *
+     * @param conversationKey The unique key for the conversation.
+     * @param userId The ID of the user for whom the conversation is being deleted.
+     */
+    public void deleteEncryptedConversation(String conversationKey, String userId) {
+        String collectionName = "user_" + userId;
+
+        try {
+            db.collection(collectionName).document(conversationKey).delete().get();
+            System.out.println("Encrypted conversation deleted with ID: " + conversationKey + " for user: " + userId);
+        } catch (InterruptedException | ExecutionException e) {
+            System.err.println("Error deleting encrypted conversation for user " + userId + ": " + e.getMessage());
+        }
+    }
+
+    /**
+     * Retrieves all encrypted conversations for a specific user from their Firestore collection.
      *
      * @param user The user whose conversations are being retrieved.
-     * @return A list of Conversation objects for the specified user.
+     * @return A list of encrypted conversations as strings for the specified user.
      */
-    public List<Conversation> getAllConversations(User user) {
-        List<Conversation> userConversations = new ArrayList<>();
+    public List<String> getAllEncryptedConversations(User user) {
+        List<String> encryptedConversations = new ArrayList<>();
         String userId = user.getUserID();
         String collectionName = "user_" + userId;
 
@@ -237,41 +273,20 @@ public class FirebaseStorage {
             // Retrieve all conversations in the user's collection
             List<QueryDocumentSnapshot> allDocuments = db.collection(collectionName).get().get().getDocuments();
 
-            System.out.println("Retrieved all conversation documents from Firebase for user: " + userId);
+            System.out.println("Retrieved all encrypted conversation documents from Firebase for user: " + userId);
 
             for (QueryDocumentSnapshot document : allDocuments) {
-                Conversation conversation = document.toObject(Conversation.class);
-                System.out.println("Loaded conversation with ID: " + document.getId() + " with participants: " +
-                        conversation.getParticipant1().getUserID() + " and " + conversation.getParticipant2().getUserID());
-
-                if (conversation.isParticipant(user)) {
-                    System.out.println("Adding conversation for user: " + userId);
-                    userConversations.add(conversation);
+                String encryptedData = document.getString("encryptedData");
+                if (encryptedData != null) {
+                    encryptedConversations.add(encryptedData);
                 }
             }
         } catch (InterruptedException | ExecutionException e) {
-            System.err.println("Error retrieving conversations from Firebase for user: " + userId + ": " + e.getMessage());
+            System.err.println("Error retrieving encrypted conversations from Firebase for user: " + userId + ": " + e.getMessage());
         }
 
-        return userConversations;
+        return encryptedConversations;
     }
-
-    /**
-     * Deletes a conversation from a user-specific Firestore collection.
-     *
-     * @param conversationKey The unique key for the conversation.
-     * @param userId The ID of the user for whom the conversation is being deleted.
-     */
-    public void deleteConversation(String conversationKey, String userId) {
-        String collectionName = "user_" + userId;
-        try {
-            db.collection(collectionName).document(conversationKey).delete().get();
-            System.out.println("Conversation deleted with ID: " + conversationKey + " for user: " + userId);
-        } catch (InterruptedException | ExecutionException e) {
-            System.err.println("Error deleting conversation for user " + userId + ": " + e.getMessage());
-        }
-    }
-
 
      // ------------------ Group Methods ------------------ //
 

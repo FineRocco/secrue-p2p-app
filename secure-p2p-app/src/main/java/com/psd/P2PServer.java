@@ -24,7 +24,8 @@ import com.psd.entities.Group;
 import com.psd.entities.Message;
 import com.psd.entities.MessageGroup;
 import com.psd.entities.User;
-import com.psd.services.EncriptionService;
+import com.psd.services.EncryptionService;
+import com.psd.services.SSLService;
 import com.psd.services.SecretSharingService;
 import com.psd.services.SerializationService;
 import com.psd.storage.AWS3Storage;
@@ -42,6 +43,7 @@ import org.bouncycastle.jce.provider.BouncyCastleProvider;
 
 import java.io.*;
 import java.net.InetAddress;
+import java.security.GeneralSecurityException;
 import java.security.Security;
 import java.util.List;
 import java.util.Map;
@@ -56,7 +58,7 @@ public class P2PServer {
     private static User userAux;
     private final User user;
     private final int port; // The port on which the server listens
-    private String secretKey; // The secret key
+    public static String secretKeyCloud; // The secret key
     private SSLServerSocket serverSocket;
     private volatile boolean running = true; // Will be modified by different threads
     private BorderPane mainMenuLayout; // Reference to the main layout in the JavaFX UI
@@ -97,8 +99,8 @@ public class P2PServer {
          */
         public void start() {
             try {
-                EncriptionService.initializeServerKeys(user.getUserID());
-                sslServerSocketFactory = EncriptionService.initializeServerSSLContext(user.getUserID());
+                SSLService.initializeServerKeys(user.getUserID());
+                sslServerSocketFactory = SSLService.initializeServerSSLContext(user.getUserID());
                 if (sslServerSocketFactory == null) {
                     System.out.println("Failed to create SSL peer server socket factory.");
                     return;
@@ -121,6 +123,46 @@ public class P2PServer {
             }
         }
 
+        public static void saveConversationClouds(String conversationId, String encryptedConversation, String userId){
+            // Save updated conversation to both AWS S3, Firebase and AzureBlob
+            try {
+                System.out.println("Saving conversation to AWS S3.");
+                aws3Storage.saveEncryptedConversation(conversationId, encryptedConversation, userId);
+                System.out.println("Saved conversation to Firebase.");
+                firebaseStorage.saveEncryptedConversation(conversationId, encryptedConversation, userId);
+                System.out.println("Saved conversation to Azure Blob.");
+                azureBlobStorage.saveEncryptedConversation(conversationId, encryptedConversation, userId);
+            } catch (IOException e) {
+                System.err.println("Error saving conversation to cloud: " + e.getMessage());
+                e.printStackTrace();
+            }
+        }
+
+        public static String loadConversationClouds(String conversationId, String userId){
+            try {
+                // Attempt to load the conversation from AWS S3
+                String conversation = aws3Storage.loadEncryptedConversation(conversationId, userId);
+
+                // If the conversation is not found in AWS S3, try loading it from Firebase
+                if (conversation == null) {
+                    conversation = firebaseStorage.loadEncryptedConversation(conversationId, userId);
+                    System.out.println("Loaded conversation from Firebase.");
+                }
+
+                // If the conversation is not found in firebase, try loading it from AzureBlob
+                if (conversation == null) {
+                    conversation = azureBlobStorage.loadEncryptedConversation(conversationId, userId);
+                    System.out.println("Loaded conversation from AzureBlob.");
+                }
+                return conversation;
+
+            } catch (IOException e) {
+                System.err.println("Error loading conversation from cloud: " + e.getMessage());
+                e.printStackTrace();
+                return null;
+            }
+        }
+        
         /**
          * Ensures that key shares exist in the clouds. If not, generates and distributes shares.
          *
@@ -149,8 +191,8 @@ public class P2PServer {
                     );
         
                     // Reconstruct the key
-                    this.secretKey = SecretSharingService.reconstructKey(retrievedShares);
-                    System.out.println("Reconstructed Secret Key: " + this.secretKey);
+                    P2PServer.secretKeyCloud = SecretSharingService.reconstructKey(retrievedShares);
+                    System.out.println("Reconstructed Secret Key: " + P2PServer.secretKeyCloud);
                     return;
                 }
 
@@ -159,8 +201,8 @@ public class P2PServer {
                 Map<Integer, String> shares = SecretSharingService.generateAndSplitKey();
 
                 // Extract the original key (used for your secretKey field)
-                this.secretKey = SecretSharingService.reconstructKey(shares);
-                System.out.println("Generated Secret Key: " + this.secretKey);
+                P2PServer.secretKeyCloud = SecretSharingService.reconstructKey(shares);
+                System.out.println("Generated Secret Key: " + P2PServer.secretKeyCloud);
 
                 // Distribute shares to the clouds
                 if (!awsShareExists) {
@@ -193,66 +235,115 @@ public class P2PServer {
          */
         public boolean sendDirectMessage(Message message, User sender, User receiver) {
             try {
-                sslServerSocketFactory = EncriptionService.initializeServerSSLContext(user.getUserID());
+                // Initialize SSL context
+                try {
+                    sslServerSocketFactory = SSLService.initializeServerSSLContext(user.getUserID());
+                } catch (Exception e) {
+                    System.err.println("Error initializing SSL context: " + e.getMessage());
+                    e.printStackTrace();
+                    return false;
+                }
 
                 // Ensure receiver details are up-to-date if missing
                 if (receiver.getIpAddress() == null || receiver.getPort() == 0) {
-                    client.sendUserToCentralServer(List.of(SerializationService.serialize(sender), SerializationService.serialize(receiver)));
-                    synchronized (userAuxLock) {
-                        userAuxLock.wait(); // Wait for receiver details update
-                        receiver = userAux;
+                    try {
+                        client.sendUserToCentralServer(List.of(SerializationService.serialize(sender), SerializationService.serialize(receiver)));
+                        synchronized (userAuxLock) {
+                            userAuxLock.wait(); // Wait for receiver details update
+                            receiver = userAux;
+                        }
+                    } catch (Exception e) {
+                        System.err.println("Error updating receiver details: " + e.getMessage());
+                        e.printStackTrace();
+                        return false;
                     }
                 }
+
                 User finalReceiver = receiver;
 
                 // Create the unique conversation ID based on sender and receiver
-                String conversationId = Conversation.createConversation(sender, finalReceiver).getConversationId();
-
-                // Attempt to load the conversation from AWS S3
-                Conversation conversation = aws3Storage.loadConversation(conversationId, sender.getUserID());
-                
-                // If the conversation is not found in AWS S3, try loading it from Firebase
-                if (conversation == null) {
-                    conversation = firebaseStorage.loadConversation(conversationId, sender.getUserID());
-                    System.out.println("Loaded conversation from Firebase.");
+                String conversationId;
+                try {
+                    conversationId = Conversation.createConversation(sender, finalReceiver).getConversationId();
+                    System.out.println("Generated conversation ID: " + conversationId);
+                } catch (Exception e) {
+                    System.err.println("Error generating conversation ID: " + e.getMessage());
+                    e.printStackTrace();
+                    return false;
                 }
 
-                // If the conversation is not found in firebase, try loading it from AzureBlob
-                if (conversation == null) {
-                    conversation = azureBlobStorage.loadConversation(conversationId, sender.getUserID());
-                    System.out.println("Loaded conversation from AzureBlob.");
+                // Attempt to load the conversation from cloud storage
+                String encryptedConversation;
+                try {
+                    encryptedConversation = loadConversationClouds(conversationId, sender.getUserID());
+                    System.out.println("Loaded encrypted conversation: " + encryptedConversation);
+                } catch (Exception e) {
+                    System.err.println("Error loading conversation from cloud: " + e.getMessage());
+                    e.printStackTrace();
+                    return false;
                 }
-                
-                // If the conversation is still not found, create a new one
-                if (conversation == null) {
-                    conversation = Conversation.createConversation(sender, finalReceiver);
-                    System.out.println("Created a new conversation with ID: " + conversationId);
+
+                Conversation conversation;
+
+                try {
+                    if (encryptedConversation == null) {
+                        // If no conversation exists, create a new one
+                        conversation = Conversation.createConversation(sender, finalReceiver);
+                        System.out.println("Created a new conversation with ID: " + conversationId);
+
+                        // Add message to the conversation
+                        conversation.addMessage(message);
+
+                        // Encrypt the new conversation
+                        String newEncryptedConversation = EncryptionService.encryptObject(secretKeyCloud, conversation);
+
+                        // Save the encrypted conversation to the clouds
+                        saveConversationClouds(conversationId, newEncryptedConversation, sender.getUserID());
+                    } else {
+                        // Decrypt the existing conversation
+                        System.out.println("Decrypting conversation with key: " + secretKeyCloud);
+                        conversation = (Conversation) EncryptionService.decryptObject(secretKeyCloud, encryptedConversation);
+                        System.out.println("Decrypted conversation with ID: " + conversationId);
+
+                        // Add message to the conversation
+                        conversation.addMessage(message);
+
+                        // Encrypt the updated conversation
+                        String newEncryptedConversation = EncryptionService.encryptObject(secretKeyCloud, conversation);
+
+                        // Save the updated conversation to the clouds
+                        saveConversationClouds(conversationId, newEncryptedConversation, sender.getUserID());
+                    }
+                } catch (Exception e) {
+                    System.err.println("Error handling conversation encryption/decryption: " + e.getMessage());
+                    e.printStackTrace();
+                    return false;
                 }
 
-                // Add message to conversation
-                conversation.addMessage(message);
+                // Send the message to the receiver
+                try {
+                    client.sendMessage(finalReceiver, SerializationService.serialize(message));
+                    System.out.println("Message sent to receiver: " + finalReceiver.getUserID());
+                } catch (Exception e) {
+                    System.err.println("Error sending message to receiver: " + e.getMessage());
+                    e.printStackTrace();
+                    return false;
+                }
 
-                // Save updated conversation to both AWS S3, Firebase and AzureBlob
-                System.out.println("Saving conversation to AWS S3.");
-                aws3Storage.saveConversation(conversationId, conversation, sender.getUserID());
-                System.out.println("Saved conversation to Firebase.");
-                firebaseStorage.saveConversation(conversationId, conversation, sender.getUserID());
-                System.out.println("Saved conversation to Azure Blob.");
-                azureBlobStorage.saveConversation(conversationId, conversation, sender.getUserID());
-
-                // Send message to the receiver
-                client.sendMessage(finalReceiver, SerializationService.serialize(message));
                 return true;
+
             } catch (Exception e) {
                 System.err.println("Failed to send message: " + e.getMessage());
+                e.printStackTrace();
                 return false;
             }
         }
 
+        
         public void sendInterestsToCentralServer(User user){
             client.sendInterestsToCentralServer(SerializationService.serialize(user));
         }
-
+        
         /**
          * Sends a group message from the sender to all members of a specified group.
          * If any group member's information is missing, it requests the details from the central server before sending.
@@ -266,7 +357,7 @@ public class P2PServer {
             boolean allMessagesSent = true;
 
             try {
-                sslServerSocketFactory = EncriptionService.initializeServerSSLContext(user.getUserID());
+                sslServerSocketFactory = SSLService.initializeServerSSLContext(user.getUserID());
 
                 // Add the message to the group's messages map
                 group.addMessage(message);
@@ -311,8 +402,8 @@ public class P2PServer {
 
             return allMessagesSent;
         }
-
-    
+        
+            
         /**
          * Handles communication with an individual client in a separate thread.
          * Each client interaction is managed through an instance of this class.
@@ -331,7 +422,7 @@ public class P2PServer {
                 this.socket = socket;
                 this.mainMenuLayout = mainMenuLayout;
             }
-    
+            
             @Override
             public void run() {
                 try (DataInputStream dataIn = new DataInputStream(socket.getInputStream())) {
@@ -358,7 +449,7 @@ public class P2PServer {
                     }
                 }
             }
-    
+            
             /**
              * Updates the userAux object with new user details, notifying any waiting threads.
              *
@@ -370,7 +461,7 @@ public class P2PServer {
                     userAuxLock.notifyAll(); // Notify waiting threads of the update
                 }
             }
-    
+            
             /**
              * Processes a received message, adding it to the appropriate conversation and updating the UI.
              *
@@ -381,42 +472,46 @@ public class P2PServer {
                 User receiver = message.getReceiver();
                 System.out.printf("Received message from %s:%d%n", sender.getIpAddress(), sender.getPort());
 
-                // Create the unique conversation ID based on sender and receiver
-                String conversationId = Conversation.createConversation(sender, receiver).getConversationId();
-
                 try {
+                    // Create the unique conversation ID based on sender and receiver
+                    String conversationId = Conversation.createConversation(sender, receiver).getConversationId();
+
                     // Attempt to load the conversation from AWS S3
-                    Conversation conversation = aws3Storage.loadConversation(conversationId, sender.getUserID());
-
-                    // If the conversation is not found in AWS S3, try loading it from Firebase
-                    if (conversation == null) {
-                        conversation = firebaseStorage.loadConversation(conversationId, sender.getUserID());
-                        System.out.println("Loaded conversation from Firebase.");
-                    }
-
-                    // If the conversation is not found in firebase, try loading it from AzureBlob
-                    if (conversation == null) {
-                        conversation = azureBlobStorage.loadConversation(conversationId, sender.getUserID());
-                        System.out.println("Loaded conversation from AzureBlob.");
-                    }
-
+                    String encryptedConversation = loadConversationClouds(conversationId, receiver.getUserID());
+                    
                     // If the conversation is still not found, create a new one
-                    if (conversation == null) {
-                        conversation = Conversation.createConversation(sender, message.getReceiver());
+                    if (encryptedConversation == null) {
+                        Conversation conversation = Conversation.createConversation(sender, receiver);
                         System.out.println("Created a new conversation with ID: " + conversationId);
-                    }
 
-                    // Save updated conversation to both AWS S3, Firebase and AzureBlob
-                    aws3Storage.saveConversation(conversationId, conversation, sender.getUserID());
-                    firebaseStorage.saveConversation(conversationId, conversation, sender.getUserID());
-                    azureBlobStorage.saveConversation(conversationId, conversation, sender.getUserID());
+                        // Add message to conversation
+                        conversation.addMessage(message);
+
+                        // Encrypt the conversation using the shared secret key
+                        String newEncryptedConversation = EncryptionService.encryptObject(secretKeyCloud, conversation);
+
+                        // Save updated conversation to both AWS S3, Firebase and AzureBlob
+                        saveConversationClouds(conversationId, newEncryptedConversation, receiver.getUserID());
+                    } else {
+                        // Decrypt the conversation using the shared secret key
+                        Conversation conversation = (Conversation) EncryptionService.decryptObject(secretKeyCloud, encryptedConversation);
+
+                        // Add message to conversation
+                        conversation.addMessage(message);
+
+                        // Encrypt the conversation using the shared secret key
+                        String newEncryptedConversation = EncryptionService.encryptObject(secretKeyCloud, conversation);
+
+                        // Save updated conversation to both AWS S3, Firebase and AzureBlob
+                        saveConversationClouds(conversationId, newEncryptedConversation, receiver.getUserID());
+                    }
 
                     // Update the UI to display the received message
                     Platform.runLater(() -> {
                         Label messageLabel = new Label("Received message from: " + message.getSender().getUserID());
                         mainMenuLayout.setCenter(new StackPane(messageLabel)); // Display message in UI
                     });
-                } catch (IOException e) {
+                } catch (IOException |GeneralSecurityException | ClassNotFoundException e) {
                     System.err.println("Error handling message: " + e.getMessage());
                 }
             }
@@ -464,7 +559,7 @@ public class P2PServer {
                     // Update the UI to display the received group message
                     Platform.runLater(() -> {
                         Label messageLabel = new Label("Received group message from: " + messageGroup.getSender().getUserID() + 
-                                                       " in group: " + groupTopic);
+                                                    " in group: " + groupTopic);
                         mainMenuLayout.setCenter(new StackPane(messageLabel)); // Display message in UI
                     });
                 } catch (IOException e) {

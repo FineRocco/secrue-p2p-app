@@ -20,7 +20,9 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class AWS3Storage {
     private static AWS3Storage instance;
@@ -156,72 +158,104 @@ public class AWS3Storage {
         }
     }
 
-    // ------------------ Conversation Methods ------------------ //
+    // ------------------ Encrypted Conversation Methods ------------------ //
 
-    public void saveConversation(String conversationKey, Conversation conversation, String userId) throws IOException {
-        byte[] conversationBytes = SerializationService.serialize(conversation);
-        InputStream inputStream = new ByteArrayInputStream(conversationBytes);
-        ObjectMetadata metadata = new ObjectMetadata();
-        metadata.setContentLength(conversationBytes.length);
+    public void saveEncryptedConversation(String conversationKey, String encryptedConversation, String userId) throws IOException {
+        try {
+            // Convert the encrypted conversation string to bytes
+            byte[] encryptedBytes = encryptedConversation.getBytes();
+            InputStream inputStream = new ByteArrayInputStream(encryptedBytes);
 
-        s3Client.putObject("psd-" + userId, conversationKey, inputStream, metadata);
+            // Set metadata for the object
+            ObjectMetadata metadata = new ObjectMetadata();
+            metadata.setContentLength(encryptedBytes.length);
+            metadata.setContentType("text/plain");
+
+            // Save the encrypted conversation in the user's bucket
+            String bucketName = "psd-" + userId.toLowerCase();
+            s3Client.putObject(bucketName, conversationKey, inputStream, metadata);
+
+            System.out.println("Encrypted conversation saved successfully: " + conversationKey);
+        } catch (Exception e) {
+            System.err.println("Error saving encrypted conversation: " + e.getMessage());
+            throw new IOException("Error saving encrypted conversation", e);
+        }
     }
 
-    public Conversation loadConversation(String conversationKey, String userId) throws IOException {
-        if (!s3Client.doesObjectExist("psd-" + userId, conversationKey)) {
-            System.out.println("Conversation not found for key: " + conversationKey);
+    public String loadEncryptedConversation(String conversationKey, String userId) throws IOException {
+        String bucketName = "psd-" + userId.toLowerCase();
+        if (!s3Client.doesObjectExist(bucketName, conversationKey)) {
+            System.out.println("Encrypted conversation not found for key: " + conversationKey);
             return null;
         }
 
-        S3Object s3Object = s3Client.getObject("psd-" + userId, conversationKey);
-        try (InputStream inputStream = s3Object.getObjectContent()) {
-            ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+        S3Object s3Object = s3Client.getObject(bucketName, conversationKey);
+        try (InputStream inputStream = s3Object.getObjectContent();
+            ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+
             byte[] buffer = new byte[1024];
             int length;
             while ((length = inputStream.read(buffer)) != -1) {
-                byteArrayOutputStream.write(buffer, 0, length);
+                outputStream.write(buffer, 0, length);
             }
 
-            byte[] conversationBytes = byteArrayOutputStream.toByteArray();
-            return (Conversation) SerializationService.deserialize(conversationBytes);
+            // Return the encrypted conversation as a String
+            return outputStream.toString();
+        } catch (Exception e) {
+            System.err.println("Error loading encrypted conversation: " + e.getMessage());
+            throw new IOException("Error loading encrypted conversation", e);
         }
     }
 
-    public List<String> listAllConversationKeys(User user) {
-        List<String> keys = new ArrayList<>();
-        ListObjectsV2Request req = new ListObjectsV2Request().withBucketName("psd-" + user.getUserID());
+    public Map<String, String> listAllEncryptedConversations(User user) {
+        Map<String, String> encryptedConversations = new HashMap<>();
+        String bucketName = "psd-" + user.getUserID().toLowerCase();
+    
+        ListObjectsV2Request req = new ListObjectsV2Request().withBucketName(bucketName);
         ListObjectsV2Result result;
-
+    
         do {
             result = s3Client.listObjectsV2(req);
             for (S3ObjectSummary objectSummary : result.getObjectSummaries()) {
-                keys.add(objectSummary.getKey());
+                String conversationId = objectSummary.getKey();
+    
+                // Skip objects in the "shares" folder
+                if (conversationId.startsWith("shares/")) {
+                    continue;
+                }
+    
+                try {
+                    // Retrieve the object content (encrypted data)
+                    S3Object s3Object = s3Client.getObject(bucketName, conversationId);
+                    try (InputStream inputStream = s3Object.getObjectContent();
+                         ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream()) {
+                        byte[] buffer = new byte[1024];
+                        int length;
+                        while ((length = inputStream.read(buffer)) != -1) {
+                            byteArrayOutputStream.write(buffer, 0, length);
+                        }
+                        // Convert the data to a string (assuming Base64-encoded encrypted data)
+                        String encryptedData = byteArrayOutputStream.toString();
+                        encryptedConversations.put(conversationId, encryptedData);
+                    }
+                } catch (Exception e) {
+                    System.err.println("Error retrieving encrypted conversation for key " + conversationId + ": " + e.getMessage());
+                }
             }
             req.setContinuationToken(result.getNextContinuationToken());
         } while (result.isTruncated());
+    
+        return encryptedConversations;
+    }    
 
-        return keys;
-    }
-
-    public List<Conversation> getAllConversations(User user) {
-        List<Conversation> userConversations = new ArrayList<>();
-        List<String> allIds = listAllConversationKeys(user);
-
-        for (String key : allIds) {
-            try {
-                Conversation conversation = loadConversation(key, user.getUserID());
-                if (conversation != null && conversation.isParticipant(user)) {
-                    userConversations.add(conversation);
-                }
-            } catch (IOException e) {
-                System.err.println("Error loading conversation for key " + key + ": " + e.getMessage());
-            }
+    public void deleteEncryptedConversation(String conversationKey, String userId) {
+        String bucketName = "psd-" + userId.toLowerCase();
+        try {
+            s3Client.deleteObject(bucketName, conversationKey);
+            System.out.println("Deleted encrypted conversation: " + conversationKey);
+        } catch (Exception e) {
+            System.err.println("Error deleting encrypted conversation: " + e.getMessage());
         }
-        return userConversations;
-    }
-
-    public void deleteConversation(String conversationKey, String userId) {
-        s3Client.deleteObject("psd-" + userId, conversationKey);
     }
 
     // ------------------ Group Methods ------------------ //

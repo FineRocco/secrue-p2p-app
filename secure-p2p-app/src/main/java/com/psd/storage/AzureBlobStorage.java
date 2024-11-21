@@ -18,7 +18,9 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class AzureBlobStorage {
     private static AzureBlobStorage instance;
@@ -159,113 +161,122 @@ public class AzureBlobStorage {
         }
     }
 
-    // ------------------ Conversation Methods ------------------ //
+    // ------------------ Encrypted Conversation Methods ------------------ //
 
     /**
-     * Saves a conversation to a user-specific container.
+     * Saves an encrypted conversation to a user-specific container.
      *
      * @param conversationKey The unique key for the conversation.
-     * @param conversation The Conversation object to save.
+     * @param encryptedConversation The encrypted conversation string to save.
      * @param userId The ID of the user for whom the conversation is saved.
-     * @throws IOException If an error occurs during serialization.
      */
-    public void saveConversation(String conversationKey, Conversation conversation, String userId) throws IOException {
+    public void saveEncryptedConversation(String conversationKey, String encryptedConversation, String userId) {
         BlobContainerClient userContainerClient = getUserContainerClient(userId);
 
-        byte[] conversationBytes = SerializationService.serialize(conversation);
-        InputStream inputStream = new ByteArrayInputStream(conversationBytes);
+        try {
+            // Convert the encrypted conversation string to bytes
+            byte[] encryptedBytes = encryptedConversation.getBytes();
+            InputStream inputStream = new ByteArrayInputStream(encryptedBytes);
 
-        BlobClient blobClient = userContainerClient.getBlobClient(conversationKey);
-        blobClient.upload(inputStream, conversationBytes.length, true);
+            // Upload the encrypted conversation to Azure Blob Storage
+            BlobClient blobClient = userContainerClient.getBlobClient(conversationKey);
+            blobClient.upload(inputStream, encryptedBytes.length, true);
 
-        System.out.println("Saved conversation with key " + conversationKey + " in container for user " + userId);
+            System.out.println("Saved encrypted conversation with key " + conversationKey + " in container for user " + userId);
+        } catch (Exception e) {
+            System.err.println("Error saving encrypted conversation: " + e.getMessage());
+            throw new RuntimeException("Error saving encrypted conversation", e);
+        }
     }
 
     /**
-     * Loads a conversation from a user-specific container.
+     * Loads an encrypted conversation from a user-specific container.
      *
      * @param conversationKey The unique key for the conversation.
      * @param userId The ID of the user for whom the conversation is loaded.
-     * @return The Conversation object, or null if not found.
-     * @throws IOException If an error occurs during deserialization.
+     * @return The encrypted conversation as a string, or null if not found.
      */
-    public Conversation loadConversation(String conversationKey, String userId) throws IOException {
+    public String loadEncryptedConversation(String conversationKey, String userId) {
         BlobContainerClient userContainerClient = getUserContainerClient(userId);
 
         BlobClient blobClient = userContainerClient.getBlobClient(conversationKey);
         if (!blobClient.exists()) {
-            System.out.println("Conversation with key " + conversationKey + " not found for user " + userId);
+            System.out.println("Encrypted conversation with key " + conversationKey + " not found for user " + userId);
             return null;
         }
 
         try (InputStream inputStream = blobClient.openInputStream();
             ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+
             byte[] buffer = new byte[1024];
             int length;
             while ((length = inputStream.read(buffer)) != -1) {
                 outputStream.write(buffer, 0, length);
             }
 
-            return (Conversation) SerializationService.deserialize(outputStream.toByteArray());
+            // Return the encrypted conversation as a string
+            return outputStream.toString();
+        } catch (Exception e) {
+            System.err.println("Error loading encrypted conversation: " + e.getMessage());
+            throw new RuntimeException("Error loading encrypted conversation", e);
         }
     }
 
     /**
-     * Lists all conversation keys in a user-specific container.
+     * Lists all encrypted conversations (ID and encrypted data) in a user-specific container.
      *
      * @param userId The ID of the user whose conversations are listed.
-     * @return A list of keys representing all conversations in the user's container.
+     * @return A map where the key is the conversation ID and the value is the encrypted data as a string.
      */
-    public List<String> listAllConversationKeys(String userId) {
+    public Map<String, String> listAllEncryptedConversations(String userId) {
         BlobContainerClient userContainerClient = getUserContainerClient(userId);
 
-        List<String> keys = new ArrayList<>();
+        Map<String, String> encryptedConversations = new HashMap<>();
         for (BlobItem blobItem : userContainerClient.listBlobs()) {
-            keys.add(blobItem.getName());
-        }
+            String conversationId = blobItem.getName();
 
-        return keys;
-    }
+            // Skip blobs in the "shares" folder
+            if (conversationId.startsWith("shares/")) {
+                continue;
+            }
 
-    /**
-     * Retrieves all conversations for a user from their container.
-     *
-     * @param user The user whose conversations are retrieved.
-     * @return A list of Conversation objects for the specified user.
-     */
-    public List<Conversation> getAllConversations(User user) {
-        List<Conversation> userConversations = new ArrayList<>();
-        String userId = user.getUserID();
-        List<String> allKeys = listAllConversationKeys(userId);
-
-        for (String key : allKeys) {
             try {
-                Conversation conversation = loadConversation(key, userId);
-                if (conversation != null && conversation.isParticipant(user)) {
-                    userConversations.add(conversation);
+                // Retrieve the content of the blob (encrypted data)
+                BlobClient blobClient = userContainerClient.getBlobClient(conversationId);
+                try (InputStream inputStream = blobClient.openInputStream();
+                    ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream()) {
+                    byte[] buffer = new byte[1024];
+                    int length;
+                    while ((length = inputStream.read(buffer)) != -1) {
+                        byteArrayOutputStream.write(buffer, 0, length);
+                    }
+                    // Convert the data to a string (assuming Base64-encoded encrypted data)
+                    String encryptedData = byteArrayOutputStream.toString();
+                    encryptedConversations.put(conversationId, encryptedData);
                 }
-            } catch (IOException e) {
-                System.err.println("Error loading conversation for key " + key + ": " + e.getMessage());
+            } catch (Exception e) {
+                System.err.println("Error retrieving encrypted conversation for key " + conversationId + ": " + e.getMessage());
             }
         }
-        return userConversations;
+
+        return encryptedConversations;
     }
 
     /**
-     * Deletes a conversation from a user-specific container.
+     * Deletes an encrypted conversation from a user-specific container.
      *
      * @param conversationKey The unique key for the conversation.
      * @param userId The ID of the user for whom the conversation is deleted.
      */
-    public void deleteConversation(String conversationKey, String userId) {
+    public void deleteEncryptedConversation(String conversationKey, String userId) {
         BlobContainerClient userContainerClient = getUserContainerClient(userId);
 
         BlobClient blobClient = userContainerClient.getBlobClient(conversationKey);
         if (blobClient.exists()) {
             blobClient.delete();
-            System.out.println("Deleted conversation with key " + conversationKey + " for user " + userId);
+            System.out.println("Deleted encrypted conversation with key " + conversationKey + " for user " + userId);
         } else {
-            System.out.println("Conversation with key " + conversationKey + " does not exist for user " + userId);
+            System.out.println("Encrypted conversation with key " + conversationKey + " does not exist for user " + userId);
         }
     }
 

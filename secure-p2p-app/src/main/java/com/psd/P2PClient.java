@@ -16,7 +16,7 @@
 package com.psd;
 
 import com.psd.entities.User;
-import com.psd.services.EncriptionService;
+import com.psd.services.SSLService;
 import com.psd.services.SerializationService;
 
 import javax.net.ssl.*;
@@ -49,7 +49,7 @@ public class P2PClient {
      */
     public P2PClient(User user) {
         this.user = user;
-        sslSocketFactory = EncriptionService.initializeSSLContext(user.getUserID()); // Initialize SSL context when client is created
+        sslSocketFactory = SSLService.initializeSSLContext(user.getUserID()); // Initialize SSL context when client is created
         if (sslSocketFactory == null) {
             System.out.println("Failed to create SSL peer client socket factory.");
             return;
@@ -68,7 +68,7 @@ public class P2PClient {
      */
     public void sendUserToCentralServer(List<byte[]> users) {
         try {
-            sslSocketFactory = EncriptionService.initializeSSLContext(user.getUserID());
+            sslSocketFactory = SSLService.initializeSSLContext(user.getUserID());
             // Connect to central server over SSL
             clientSocket = (SSLSocket) sslSocketFactory.createSocket(InetAddress.getLocalHost(), 8888);
 
@@ -102,7 +102,7 @@ public class P2PClient {
      */
     public void sendInterestsToCentralServer(byte[] userData) {
         try {
-            sslSocketFactory = EncriptionService.initializeSSLContext(user.getUserID());
+            sslSocketFactory = SSLService.initializeSSLContext(user.getUserID());
             // Connect to central server over SSL
             clientSocket = (SSLSocket) sslSocketFactory.createSocket(InetAddress.getLocalHost(), 8888);
 
@@ -135,7 +135,7 @@ public class P2PClient {
      */
     public void sendMessage(User receiver, byte[] message) {
         try {
-            sslSocketFactory = EncriptionService.initializeSSLContext(user.getUserID());
+            sslSocketFactory = SSLService.initializeSSLContext(user.getUserID());
 
             // Connect to the receiver's IP and port over SSL
             clientSocket = (SSLSocket) sslSocketFactory.createSocket(receiver.getIpAddress(), receiver.getPort());

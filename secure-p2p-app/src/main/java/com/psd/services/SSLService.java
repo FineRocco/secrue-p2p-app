@@ -27,22 +27,13 @@ import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.cert.X509Certificate;
 import java.math.BigInteger;
-import java.nio.charset.StandardCharsets;
-import java.util.Base64;
 import java.util.Date;
 import java.util.Objects;
 
 import javax.security.auth.x500.X500Principal;
 import java.security.KeyStore;
-import java.security.NoSuchAlgorithmException;
-import java.security.SecureRandom;
 import java.security.cert.Certificate;
-import java.security.cert.CertificateFactory;
 
-import javax.crypto.Cipher;
-import javax.crypto.KeyGenerator;
-import javax.crypto.SecretKey;
-import javax.crypto.spec.IvParameterSpec;
 import javax.net.ssl.*;
 import java.io.*;
 
@@ -52,7 +43,7 @@ import org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder;
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 import org.bouncycastle.operator.ContentSigner;
 
-public class EncriptionService {
+public class SSLService {
 
     // Directory for storing keystore and truststore files
     public static final String STORE_DIRECTORY = "secure-p2p-app\\src\\main\\java\\com\\psd\\stores\\";

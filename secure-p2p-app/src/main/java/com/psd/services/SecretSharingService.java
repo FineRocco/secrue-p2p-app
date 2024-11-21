@@ -2,6 +2,7 @@ package com.psd.services;
 
 import com.codahale.shamir.Scheme;
 
+import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.util.Base64;
 import java.util.Map;
@@ -57,25 +58,38 @@ public class SecretSharingService {
      * Reconstructs the original key from the shares.
      *
      * @param shares The map of shares (key: share index, value: share data as Base64 string).
-     * @return The original key as a string.
+     * @return The original key as a Base64-encoded string.
      */
     public static String reconstructKey(Map<Integer, String> shares) {
         try {
+            System.out.println("Received Shares for Reconstruction:");
+            shares.forEach((index, share) -> System.out.println("Share " + index + ": " + share));
+
             // Decode shares from Base64
             Map<Integer, byte[]> decodedShares = shares.entrySet().stream()
                     .collect(
                             java.util.stream.Collectors.toMap(
                                     Map.Entry::getKey,
-                                    e -> Base64.getDecoder().decode(e.getValue())
+                                    e -> {
+                                        try {
+                                            // Decode Base64-encoded share to byte array
+                                            return Base64.getDecoder().decode(e.getValue());
+                                        } catch (IllegalArgumentException ex) {
+                                            throw new RuntimeException("Invalid Base64 in share " + e.getKey() + ": " + ex.getMessage(), ex);
+                                        }
+                                    }
                             )
                     );
 
             // Use Shamir's Secret Sharing to reconstruct the key
-            Scheme scheme = new Scheme(new java.security.SecureRandom(), TOTAL_SHARES, THRESHOLD);
+            Scheme scheme = new Scheme(new SecureRandom(), TOTAL_SHARES, THRESHOLD);
             byte[] keyBytes = scheme.join(decodedShares);
 
-            // Return the reconstructed key as a Base64 string
-            return Base64.getEncoder().encodeToString(keyBytes);
+            // Encode the reconstructed key as a Base64 string
+            String reconstructedKey = Base64.getEncoder().encodeToString(keyBytes);
+            System.out.println("Reconstructed Key (Base64): " + reconstructedKey);
+
+            return reconstructedKey;
         } catch (Exception e) {
             throw new RuntimeException("Error reconstructing key: " + e.getMessage(), e);
         }

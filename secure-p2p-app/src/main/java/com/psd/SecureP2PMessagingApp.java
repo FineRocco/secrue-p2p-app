@@ -5,7 +5,8 @@ import com.psd.entities.Group;
 import com.psd.entities.Message;
 import com.psd.entities.MessageGroup;
 import com.psd.entities.User;
-import com.psd.services.EncriptionService;
+import com.psd.services.EncryptionService;
+import com.psd.services.SSLService;
 import com.psd.storage.AWS3Storage;
 import com.psd.storage.AzureBlobStorage;
 import com.psd.storage.FirebaseStorage;
@@ -20,8 +21,10 @@ import javafx.scene.paint.Color;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
 
+import java.io.IOException;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.security.GeneralSecurityException;
 import java.security.Security;
 import java.time.Instant;
 import java.time.ZoneId;
@@ -206,7 +209,7 @@ public class SecureP2PMessagingApp extends Application {
                             group.addMember(currentUser);
                         }
                     }
-                    EncriptionService.importUserCertificateToGroupTruststore(interest, currentUser.getUserID());
+                    SSLService.importUserCertificateToGroupTruststore(interest, currentUser.getUserID());
                     userServer.sendInterestsToCentralServer(currentUser);
                 }
                 interestsStage.close();
@@ -287,9 +290,10 @@ public class SecureP2PMessagingApp extends Application {
 
         // Handle conversationsButton click
         conversationsButton.setOnAction(event -> {
+            Map<String, String> encrpytedConversations = new HashMap<>();
             try {
                 // Attempt to retrieve all conversations for the current user from AWS S3
-                conversations = aws3Storage.getAllConversations(currentUser);
+                encrpytedConversations = aws3Storage.listAllEncryptedConversations(currentUser);
                 System.out.println("Successfully retrieved conversations from AWS S3.");
             } catch (Exception e) {
                 System.err.println("Error retrieving conversations from AWS S3: " + e.getMessage());
@@ -297,7 +301,7 @@ public class SecureP2PMessagingApp extends Application {
                 // Attempt to retrieve from Firebase if AWS S3 fails
                 System.out.println("Attempting to retrieve conversations from Firebase instead...");
                 try {
-                    conversations = firebaseStorage.getAllConversations(currentUser);
+                    encrpytedConversations = firebaseStorage.listAllEncryptedConversations(currentUser.getUserID());
                     System.out.println("Successfully retrieved conversations from Firebase.");
                 } catch (Exception firebaseException) {
                     System.err.println("Error retrieving conversations from Firebase: " + firebaseException.getMessage());
@@ -305,29 +309,30 @@ public class SecureP2PMessagingApp extends Application {
                     // If both AWS S3 and Firebase retrieval fail, attempt Azure Blob Storage
                     System.out.println("Attempting to retrieve conversations from Azure Blob Storage instead...");
                     try {
-                        conversations = azureBlobStorage.getAllConversations(currentUser);
+                        encrpytedConversations = azureBlobStorage.listAllEncryptedConversations(currentUser.getUserID());
                         System.out.println("Successfully retrieved conversations from Azure Blob Storage.");
                     } catch (Exception azureException) {
                         System.err.println("Error retrieving conversations from Azure Blob Storage: " + azureException.getMessage());
                     }
                 }
             }
-            //DEBUGGING
-            System.out.println("Found " + conversations.size() + " conversations for " + currentUser.getUserID());
-            System.out.println("----------------------------------------------------");
-            for (Conversation conv : conversations) {
-                System.out.println("Conversation: " + conv.getConversationId() + " between " +
-                        conv.getParticipant1().getUserID() + " and " + conv.getParticipant2().getUserID());
-                
-                // Iterate over all messages in the conversation
-                for (Message msg : conv.getMessages()) { // Use getMessages() directly
-                    System.out.println("Message: " + msg.getContent());
+
+            // Decrypt the conversations and add them to the list
+            for (Map.Entry<String, String> entry : encrpytedConversations.entrySet()) {
+                String conversationId = entry.getKey();
+                String encryptedConversation = entry.getValue();
+
+                try {
+                    // Decrypt the conversation and add it to the list
+                    Conversation conversation = (Conversation) EncryptionService.decryptObject(P2PServer.secretKeyCloud, encryptedConversation);
+                    conversations.add(conversation);
+
+                    System.out.println("Successfully decrypted conversation with ID: " + conversationId);
+                } catch (ClassNotFoundException | GeneralSecurityException | IOException e) {
+                    System.err.println("Error decrypting conversation with ID: " + conversationId + ": " + e.getMessage());
+                    e.printStackTrace();
                 }
-                
-                System.out.println("----------------------------------------------------");
             }
-               
-            //DEBUGGING
 
             // Create a layout to display the conversations
             VBox conversationsLayout = new VBox(10);
