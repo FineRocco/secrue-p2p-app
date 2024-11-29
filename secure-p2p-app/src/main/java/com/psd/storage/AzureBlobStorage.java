@@ -1,5 +1,6 @@
 package com.psd.storage;
 
+import com.azure.core.http.rest.PagedIterable;
 import com.azure.identity.ClientSecretCredential;
 import com.azure.identity.ClientSecretCredentialBuilder;
 import com.azure.storage.blob.BlobClient;
@@ -8,6 +9,7 @@ import com.azure.storage.blob.BlobContainerClientBuilder;
 import com.azure.storage.blob.BlobServiceClient;
 import com.azure.storage.blob.BlobServiceClientBuilder;
 import com.azure.storage.blob.models.BlobItem;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.psd.entities.Conversation;
 import com.psd.entities.Group;
 import com.psd.entities.User;
@@ -161,6 +163,145 @@ public class AzureBlobStorage {
         }
     }
 
+    /**
+     * Checks if the `dictionaries` folder exists in the user's Azure Blob container.
+     *
+     * @param userId The ID of the user whose container will be checked.
+     * @return {@code true} if the `dictionaries` folder exists, {@code false} otherwise.
+     */
+    public boolean checkDicExists(String userId) {
+        try {
+            // Get the user's container
+            BlobContainerClient userContainerClient = getUserContainerClient(userId);
+
+            // Check if any blob exists under the `dictionaries/` prefix
+            PagedIterable<BlobItem> blobs = userContainerClient.listBlobsByHierarchy("dictionaries/");
+            if (blobs.iterator().hasNext()) {
+                System.out.println("Dictionaries folder exists for user: " + userId);
+                return true; // Folder exists
+            }
+
+            System.out.println("Dictionaries folder does not exist for user: " + userId);
+            return false;
+        } catch (Exception e) {
+            System.err.println("Error checking dictionaries folder existence: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Creates the `dictionaries` folder in the user's Azure Blob container.
+     *
+     * @param userId The ID of the user whose container will be updated.
+     */
+    public void createDictionariesFolder(String userId) {
+        try {
+            // Get the user's container
+            BlobContainerClient userContainerClient = getUserContainerClient(userId);
+
+            // Create a dummy blob to initialize the `dictionaries` folder
+            BlobClient blobClient = userContainerClient.getBlobClient("dictionaries/init");
+            byte[] dummyData = "init".getBytes();
+            InputStream inputStream = new ByteArrayInputStream(dummyData);
+
+            blobClient.upload(inputStream, dummyData.length, true);
+            System.out.println("Created dictionaries folder in Azure Blob Storage for user: " + userId);
+        } catch (Exception e) {
+            System.err.println("Error creating dictionaries folder: " + e.getMessage());
+        }
+    }
+
+    // ------------------ Dictionaire Methods ------------------ //
+
+    /**
+     * Saves an encrypted word and its metadata to the `dictionaries` folder in the user's Azure Blob container.
+     *
+     * @param userId          The ID of the user whose container will be updated.
+     * @param encryptedWord   The encrypted word to save.
+     * @param encryptedMetadata The encrypted metadata associated with the word.
+     */
+    public void saveWordToDic(String userId, String encryptedWord, String encryptedMetadata) {
+        try {
+            // Get the user's container
+            BlobContainerClient userContainerClient = getUserContainerClient(userId);
+
+            // Construct the blob path for the encrypted word
+            BlobClient blobClient = userContainerClient.getBlobClient("dictionaries/" + encryptedWord);
+
+            // Prepare the metadata data as bytes
+            byte[] metadataBytes = encryptedMetadata.getBytes();
+            InputStream inputStream = new ByteArrayInputStream(metadataBytes);
+
+            // Check if the word already exists
+            if (blobClient.exists()) {
+                System.out.println("Word already exists in dictionary for user " + userId + ": " + encryptedWord);
+            } else {
+                // Upload the metadata
+                blobClient.upload(inputStream, metadataBytes.length, true);
+                System.out.println("Saved word to Azure Blob Storage dictionary for user: " + userId);
+            }
+        } catch (Exception e) {
+            System.err.println("Error saving word to Azure Blob Storage dictionary: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Checks if a specific word exists in the `dictionaries` folder of the user's Azure Blob container.
+     *
+     * @param userId        The ID of the user whose container will be checked.
+     * @param encryptedWord The encrypted word to check for existence.
+     * @return {@code true} if the word exists, {@code false} otherwise.
+     */
+    public boolean checkWordExistsInDic(String userId, String encryptedWord) {
+        try {
+            // Get the user's container
+            BlobContainerClient userContainerClient = getUserContainerClient(userId);
+
+            // Get the blob client for the specific word
+            BlobClient blobClient = userContainerClient.getBlobClient("dictionaries/" + encryptedWord);
+
+            // Check if the blob exists
+            boolean exists = blobClient.exists();
+            System.out.println("Checked existence of word '" + encryptedWord + "' for user " + userId + ": " + exists);
+            return exists;
+        } catch (Exception e) {
+            System.err.println("Error checking word existence in Azure Blob Storage: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Loads the encrypted metadata for a specified word from the `dictionaries` folder in the user's Azure Blob container.
+     *
+     * @param userId        The ID of the user whose container will be accessed.
+     * @param encryptedWord The encrypted word whose metadata will be loaded.
+     * @return The encrypted metadata as a String if the word exists, or {@code null} if it doesn't exist.
+     */
+    public String loadWordMetadata(String userId, String encryptedWord) {
+        try {
+            // Get the user's container
+            BlobContainerClient userContainerClient = getUserContainerClient(userId);
+
+            // Construct the path to the encrypted word blob
+            BlobClient blobClient = userContainerClient.getBlobClient("dictionaries/" + encryptedWord);
+
+            // Check if the word exists
+            if (!blobClient.exists()) {
+                System.out.println("Word not found in dictionary for user " + userId + ": " + encryptedWord);
+                return null;
+            }
+
+            // Read the blob's content and return it as a string
+            try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+                blobClient.downloadStream(outputStream);
+                return outputStream.toString(); // Return the encrypted metadata as a string
+            }
+        } catch (Exception e) {
+            System.err.println("Error loading word metadata from Azure Blob Storage dictionary: " + e.getMessage());
+            return null;
+        }
+    }
+
     // ------------------ Encrypted Conversation Methods ------------------ //
 
     /**
@@ -237,6 +378,10 @@ public class AzureBlobStorage {
 
             // Skip blobs in the "shares" folder
             if (conversationId.startsWith("shares/")) {
+                continue;
+            }
+            // Skip blobs in the "shares" folder
+            if (conversationId.startsWith("dictionaries/")) {
                 continue;
             }
 

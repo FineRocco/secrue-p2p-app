@@ -45,6 +45,7 @@ import java.io.*;
 import java.net.InetAddress;
 import java.security.GeneralSecurityException;
 import java.security.Security;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -222,7 +223,7 @@ public class P2PServer {
             } catch (Exception e) {
                 System.err.println("Error ensuring key shares: " + e.getMessage());
             }
-        }
+        }  
     
         /**
          * Sends a direct message from the sender to the receiver. If the receiver's information is missing,
@@ -320,6 +321,20 @@ public class P2PServer {
                     return false;
                 }
 
+                // Split the message content into words and save them in the user's dictionary
+                try {
+                    String[] words = message.getContent().split("\\s+"); // Split by whitespace
+                    for (String word : words) {
+                        saveWordToDictionary(sender.getUserID(), word, message.getMessageID(), conversationId, message.getTimestamp());
+                        saveWordToDictionary(receiver.getUserID(), word, message.getMessageID(), conversationId, message.getTimestamp());
+                    }
+                    System.out.println("Words from message content saved to dictionaries.");
+                } catch (Exception e) {
+                    System.err.println("Error saving words to dictionaries: " + e.getMessage());
+                    e.printStackTrace();
+                    return false;
+                }
+
                 // Send the message to the receiver
                 try {
                     client.sendMessage(finalReceiver, SerializationService.serialize(message));
@@ -339,6 +354,103 @@ public class P2PServer {
             }
         }
 
+        /**
+         * Saves a word to the user's dictionary in the cloud with associated metadata.
+         *
+         * @param userId         The ID of the user whose dictionary the word will be saved to.
+         * @param word           The word to save.
+         * @param messageId      The ID of the message containing the word.
+         * @param conversationId The ID of the conversation where the word was used.
+         * @param timestamp      The timestamp when the word was sent.
+         */
+        private void saveWordToDictionary(String userId, String word, String messageId, String conversationId, String timestamp) {
+            try {
+                // Create a dictionary entry
+                Map<String, String> wordMetadata = new HashMap<>();
+                wordMetadata.put("messageId", messageId);
+                wordMetadata.put("conversationId", conversationId);
+                wordMetadata.put("timestamp", timestamp);
+
+                saveDicToCloud(userId.toLowerCase(), word, wordMetadata);
+            } catch (Exception e) {
+                System.err.println("Error saving word to dictionary for user " + userId + ": " + e.getMessage());
+                e.printStackTrace();
+            }
+        }
+
+        /**
+         * Saves a word and its metadata to the dictionaries folder across all 3 clouds (AWS S3, Firebase, Azure).
+         *
+         * @param userId       The ID of the user whose dictionaries are being updated.
+         * @param word         The word to save.
+         * @param wordMetadata The metadata associated with the word.
+         */
+        public void saveDicToCloud(String userId, String word, Map<String, String> wordMetadata) {
+            try {
+                // Encrypt the word and metadata
+                String encryptedWord = EncryptionService.encryptObject(secretKeyCloud, word);
+                String encryptedMetadata = EncryptionService.encryptObject(secretKeyCloud, wordMetadata);
+
+                // Check if dictionaries folder exists in all clouds
+                boolean awsDicExists = aws3Storage.checkDicExists(userId);
+                boolean firebaseDicExists = firebaseStorage.checkDicExists(userId);
+                boolean azureDicExists = azureBlobStorage.checkDicExists(userId);
+
+                // Create dictionaries folder if it doesn't exist
+                if (!awsDicExists) {
+                    aws3Storage.createDictionariesFolder(userId);
+                }
+                if (!firebaseDicExists) {
+                    firebaseStorage.createDictionariesFolder(userId);
+                }
+                if (!azureDicExists) {
+                    azureBlobStorage.createDictionariesFolder(userId);
+                }
+
+                // Check if the word already exists in AWS S3
+                if (aws3Storage.checkWordExistsInDic(userId, encryptedWord)) {
+                    // If the word exists, update its metadata
+                    String existingMetadata = aws3Storage.loadWordMetadata(userId, encryptedWord);
+                    // Decrypt the metadata to its original form
+                    Map<String, String> metadata = (Map<String, String>) EncryptionService.decryptObject(secretKeyCloud, existingMetadata);
+                    metadata.putAll(wordMetadata); // Merge existing metadata with the new metadata
+                    String updatedMetadata = EncryptionService.encryptObject(secretKeyCloud, metadata);
+                    aws3Storage.saveWordToDic(userId, encryptedWord, updatedMetadata);
+                } else {
+                    // Save new word and metadata if it doesn't exist
+                    aws3Storage.saveWordToDic(userId, encryptedWord, encryptedMetadata);
+                }
+
+                // Repeat the process for Firebase
+                if (firebaseStorage.checkWordExistsInDic(userId, encryptedWord)) {
+                    String existingMetadata = firebaseStorage.loadWordMetadata(userId, encryptedWord);
+                    // Decrypt the metadata to its original form
+                    Map<String, String> metadata = (Map<String, String>) EncryptionService.decryptObject(secretKeyCloud, existingMetadata);
+                    metadata.putAll(wordMetadata);
+                    String updatedMetadata = EncryptionService.encryptObject(secretKeyCloud, metadata);
+                    firebaseStorage.saveWordToDic(userId, encryptedWord, updatedMetadata);
+                } else {
+                    firebaseStorage.saveWordToDic(userId, encryptedWord, encryptedMetadata);
+                }
+
+                // Repeat the process for Azure
+                if (azureBlobStorage.checkWordExistsInDic(userId, encryptedWord)) {
+                    String existingMetadata = azureBlobStorage.loadWordMetadata(userId, encryptedWord);
+                    // Decrypt the metadata to its original form
+                    Map<String, String> metadata = (Map<String, String>) EncryptionService.decryptObject(secretKeyCloud, existingMetadata);
+                    metadata.putAll(wordMetadata);
+                    String updatedMetadata = EncryptionService.encryptObject(secretKeyCloud, metadata);
+                    azureBlobStorage.saveWordToDic(userId, encryptedWord, updatedMetadata);
+                } else {
+                    azureBlobStorage.saveWordToDic(userId, encryptedWord, encryptedMetadata);
+                }
+
+                System.out.println("Successfully saved or updated word and metadata in dictionaries across all clouds.");
+            } catch (Exception e) {
+                System.err.println("Error saving or updating word and metadata in dictionaries: " + e.getMessage());
+                e.printStackTrace();
+            }
+        }
         
         public void sendInterestsToCentralServer(User user){
             client.sendInterestsToCentralServer(SerializationService.serialize(user));

@@ -156,6 +156,139 @@ public class FirebaseStorage {
         }
     }
 
+    // ------------------ Dictionary Methods ------------------ //
+
+    /**
+     * Checks if the `dictionary` subcollection exists in the user's Firestore collection.
+     *
+     * @param userId The ID of the user whose `dictionary` subcollection will be checked.
+     * @return {@code true} if the `dictionary` subcollection exists and contains at least one document, {@code false} otherwise.
+     */
+    public boolean checkDicExists(String userId) {
+        try {
+            String userCollectionName = "user_" + userId;
+
+            // Check if the `dictionary` subcollection exists by querying a single document
+            CollectionReference dictionaryRef = db.collection(userCollectionName).document("dictionaries").collection("dictionary");
+            QuerySnapshot snapshot = dictionaryRef.limit(1).get().get();
+            boolean exists = !snapshot.isEmpty();
+
+            System.out.println("Checked dictionary existence for user " + userId + ": " + exists);
+            return exists;
+        } catch (InterruptedException | ExecutionException e) {
+            System.err.println("Error checking dictionary existence: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Creates the `dictionary` subcollection for the user in Firestore.
+     *
+     * @param userId The ID of the user whose collection will be updated.
+     */
+    public void createDictionariesFolder(String userId) {
+        try {
+            String userCollectionName = "user_" + userId;
+
+            // Add a dummy document to initialize the subcollection
+            CollectionReference dictionaryRef = db.collection(userCollectionName).document("dictionaries").collection("dictionary");
+            Map<String, Object> initDoc = new HashMap<>();
+            initDoc.put("init", true);
+            dictionaryRef.document("init").set(initDoc).get();
+
+            System.out.println("Created dictionary subcollection in Firebase Firestore for user: " + userId);
+        } catch (InterruptedException | ExecutionException e) {
+            System.err.println("Error creating dictionary subcollection: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Saves an encrypted word and its metadata directly into the `dictionary` subcollection in Firestore.
+     *
+     * @param userId           The ID of the user whose `dictionary` subcollection will be updated.
+     * @param encryptedWord    The encrypted word to save (used as the document ID).
+     * @param encryptedMetadata The encrypted metadata associated with the word.
+     */
+    public void saveWordToDic(String userId, String encryptedWord, String encryptedMetadata) {
+        try {
+            String userCollectionName = "user_" + userId;
+
+            // Reference to the dictionary subcollection
+            CollectionReference dictionaryRef = db.collection(userCollectionName).document("dictionaries").collection("dictionary");
+
+            // Create a document with metadata as the value
+            Map<String, Object> wordData = new HashMap<>();
+            wordData.put("metadata", encryptedMetadata);
+
+            // Save the word and metadata using the word as the document ID
+            dictionaryRef.document(encryptedWord).set(wordData).get();
+
+            System.out.println("Saved word to Firebase Firestore dictionary for user: " + userId);
+        } catch (InterruptedException | ExecutionException e) {
+            System.err.println("Error saving word to Firebase Firestore dictionary: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Checks if a specific word (encrypted) exists in the `dictionary` subcollection for the user.
+     *
+     * @param userId        The ID of the user whose `dictionary` subcollection will be checked.
+     * @param encryptedWord The encrypted word to check for existence.
+     * @return {@code true} if the word exists, {@code false} otherwise.
+     */
+    public boolean checkWordExistsInDic(String userId, String encryptedWord) {
+        try {
+            String userCollectionName = "user_" + userId;
+
+            // Reference to the document for the word in the dictionary subcollection
+            DocumentReference wordRef = db.collection(userCollectionName)
+                                        .document("dictionaries")
+                                        .collection("dictionary")
+                                        .document(encryptedWord);
+
+            // Check if the document exists
+            boolean exists = wordRef.get().get().exists();
+            System.out.println("Checked existence of word '" + encryptedWord + "' for user " + userId + ": " + exists);
+            return exists;
+        } catch (InterruptedException | ExecutionException e) {
+            System.err.println("Error checking word existence in dictionary: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Loads the encrypted metadata for a specified word from the `dictionary` subcollection in the user's Firestore collection.
+     *
+     * @param userId        The ID of the user whose `dictionary` subcollection will be accessed.
+     * @param encryptedWord The encrypted word whose metadata will be loaded.
+     * @return The encrypted metadata as a String if the word exists, or {@code null} if it doesn't exist.
+     */
+    public String loadWordMetadata(String userId, String encryptedWord) {
+        try {
+            String userCollectionName = "user_" + userId;
+
+            // Reference to the dictionary subcollection
+            DocumentReference wordDocRef = db.collection(userCollectionName)
+                                            .document("dictionaries")
+                                            .collection("dictionary")
+                                            .document(encryptedWord);
+
+            // Fetch the document
+            DocumentSnapshot document = wordDocRef.get().get();
+
+            if (document.exists()) {
+                // Return the encrypted metadata
+                return document.getString("metadata");
+            } else {
+                System.out.println("Word not found in dictionary for user " + userId + ": " + encryptedWord);
+                return null;
+            }
+        } catch (InterruptedException | ExecutionException e) {
+            System.err.println("Error loading word metadata from Firebase Firestore dictionary: " + e.getMessage());
+            return null;
+        }
+    }
+
     // ------------------ Encrypted Conversation Methods ------------------ //
 
     /**
@@ -224,6 +357,9 @@ public class FirebaseStorage {
 
                 // Skip conversation IDs that start with "shares_"
                 if (conversationId.startsWith("shares_")) {
+                    continue;
+                }
+                if (conversationId.startsWith("dictionaries")) {
                     continue;
                 }
 

@@ -7,12 +7,15 @@ import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import com.amazonaws.services.s3.model.ListObjectsV2Request;
 import com.amazonaws.services.s3.model.ListObjectsV2Result;
+import com.amazonaws.services.s3.model.ObjectListing;
 import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.amazonaws.services.s3.model.S3Object;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
-import com.psd.entities.Conversation;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.psd.entities.Group;
 import com.psd.entities.User;
+import com.psd.services.EncryptionService;
 import com.psd.services.SerializationService;
 
 import java.io.ByteArrayInputStream;
@@ -20,6 +23,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -158,6 +162,124 @@ public class AWS3Storage {
         }
     }
 
+    // ------------------ Dictionaire Methods ------------------ //
+
+    /**
+     * Checks if the `dictionaries` folder exists in the user's bucket.
+     *
+     * @param userId The ID of the user whose bucket will be checked.
+     * @return {@code true} if the `dictionaries` folder exists, {@code false} otherwise.
+     */
+    public boolean checkDicExists(String userId) {
+        try {
+            String bucketName = "psd-" + userId.toLowerCase();
+            String prefix = "dictionaries/";
+
+            // Check for objects with the `dictionaries/` prefix
+            ListObjectsV2Request req = new ListObjectsV2Request()
+                    .withBucketName(bucketName)
+                    .withPrefix(prefix)
+                    .withMaxKeys(1);
+            ListObjectsV2Result result = s3Client.listObjectsV2(req);
+
+            boolean exists = !result.getObjectSummaries().isEmpty();
+            System.out.println("Checked dictionaries existence for user " + userId + ": " + exists);
+            return exists;
+        } catch (Exception e) {
+            System.err.println("Error checking dictionaries folder existence: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Creates the `dictionaries` folder in the user's bucket.
+     *
+     * @param userId The ID of the user whose bucket will be updated.
+     */
+    public void createDictionariesFolder(String userId) {
+        try {
+            String bucketName = "psd-" + userId.toLowerCase();
+            String folderKey = "dictionaries/";
+
+            // Create an empty object to represent the folder
+            s3Client.putObject(bucketName, folderKey, new ByteArrayInputStream(new byte[0]), new ObjectMetadata());
+            System.out.println("Created dictionaries folder in AWS S3 for user: " + userId);
+        } catch (Exception e) {
+            System.err.println("Error creating dictionaries folder: " + e.getMessage());
+        }
+    }
+
+    public void saveWordToDic(String userId, String encryptedWord, String encryptedMetadata) {
+        try {
+            String bucketName = "psd-" + userId.toLowerCase();
+            String wordKey = "dictionaries/" + encryptedWord;
+    
+            byte[] metadataBytes = encryptedMetadata.getBytes();
+            InputStream metadataStream = new ByteArrayInputStream(metadataBytes);
+            ObjectMetadata metadata = new ObjectMetadata();
+            metadata.setContentLength(metadataBytes.length);
+            metadata.setContentType("text/plain");
+    
+            s3Client.putObject(bucketName, wordKey, metadataStream, metadata);
+            System.out.println("Saved word to AWS S3 dictionary for user: " + userId);
+        } catch (Exception e) {
+            System.err.println("Error saving word to AWS S3 dictionary: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Checks if the specified encrypted word exists in the `dictionaries` folder in the user's bucket.
+     *
+     * @param userId        The ID of the user whose bucket will be checked.
+     * @param encryptedWord The encrypted word to check.
+     * @return {@code true} if the word exists in the dictionary, {@code false} otherwise.
+     */
+    public boolean checkWordExistsInDic(String userId, String encryptedWord) {
+        try {
+            String bucketName = "psd-" + userId.toLowerCase();
+            String wordKey = "dictionaries/" + encryptedWord;
+
+            // Check if the word exists as an object in the bucket
+            boolean exists = s3Client.doesObjectExist(bucketName, wordKey);
+            System.out.println("Checked word existence in dictionary for user " + userId + ": " + exists);
+            return exists;
+        } catch (Exception e) {
+            System.err.println("Error checking word existence in AWS S3 dictionary: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Loads the encrypted metadata for a specified word from the `dictionaries` folder in the user's bucket.
+     *
+     * @param userId        The ID of the user whose bucket will be accessed.
+     * @param encryptedWord The encrypted word whose metadata will be loaded.
+     * @return The encrypted metadata as a String if the word exists, or {@code null} if it doesn't exist.
+     * @throws IOException If an error occurs during retrieval.
+     */
+    public String loadWordMetadata(String userId, String encryptedWord) throws IOException {
+        try {
+            String bucketName = "psd-" + userId.toLowerCase();
+            String wordKey = "dictionaries/" + encryptedWord;
+
+            // Check if the word exists
+            if (!s3Client.doesObjectExist(bucketName, wordKey)) {
+                System.out.println("Word not found in dictionary for user " + userId + ": " + encryptedWord);
+                return null;
+            }
+
+            // Retrieve the object and read its content
+            S3Object s3Object = s3Client.getObject(bucketName, wordKey);
+            try (InputStream inputStream = s3Object.getObjectContent()) {
+                // Read and return the encrypted metadata as a string
+                return new String(inputStream.readAllBytes());
+            }
+        } catch (Exception e) {
+            System.err.println("Error loading word metadata from AWS S3 dictionary: " + e.getMessage());
+            throw new IOException("Error loading word metadata", e);
+        }
+    }
+
     // ------------------ Encrypted Conversation Methods ------------------ //
 
     public void saveEncryptedConversation(String conversationKey, String encryptedConversation, String userId) throws IOException {
@@ -221,6 +343,9 @@ public class AWS3Storage {
     
                 // Skip objects in the "shares" folder
                 if (conversationId.startsWith("shares/")) {
+                    continue;
+                }
+                if (conversationId.startsWith("dictionaries/")) {
                     continue;
                 }
     
