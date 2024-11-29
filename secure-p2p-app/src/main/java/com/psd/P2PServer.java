@@ -45,6 +45,7 @@ import java.io.*;
 import java.net.InetAddress;
 import java.security.GeneralSecurityException;
 import java.security.Security;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -325,8 +326,7 @@ public class P2PServer {
                 try {
                     String[] words = message.getContent().split("\\s+"); // Split by whitespace
                     for (String word : words) {
-                        saveWordToDictionary(sender.getUserID(), word, message.getMessageID(), conversationId, message.getTimestamp());
-                        saveWordToDictionary(receiver.getUserID(), word, message.getMessageID(), conversationId, message.getTimestamp());
+                        saveWordToDictionary(sender.getUserID(), word, message.getContent(), conversationId, message.getTimestamp());
                     }
                     System.out.println("Words from message content saved to dictionaries.");
                 } catch (Exception e) {
@@ -363,13 +363,13 @@ public class P2PServer {
          * @param conversationId The ID of the conversation where the word was used.
          * @param timestamp      The timestamp when the word was sent.
          */
-        private void saveWordToDictionary(String userId, String word, String messageId, String conversationId, String timestamp) {
+        public static void saveWordToDictionary(String userId, String word, String messageContent, String conversationId, String timestamp) {
             try {
                 // Create a dictionary entry
-                Map<String, String> wordMetadata = new HashMap<>();
-                wordMetadata.put("messageId", messageId);
-                wordMetadata.put("conversationId", conversationId);
-                wordMetadata.put("timestamp", timestamp);
+                Map<String, List<String>> wordMetadata = new HashMap<>();
+                wordMetadata.computeIfAbsent("messageContent", k -> new ArrayList<>()).add(messageContent);
+                wordMetadata.computeIfAbsent("conversationId", k -> new ArrayList<>()).add(conversationId);
+                wordMetadata.computeIfAbsent("timestamp", k -> new ArrayList<>()).add(timestamp);
 
                 saveDicToCloud(userId.toLowerCase(), word, wordMetadata);
             } catch (Exception e) {
@@ -385,7 +385,7 @@ public class P2PServer {
          * @param word         The word to save.
          * @param wordMetadata The metadata associated with the word.
          */
-        public void saveDicToCloud(String userId, String word, Map<String, String> wordMetadata) {
+        public static void saveDicToCloud(String userId, String word, Map<String, List<String>> wordMetadata) {
             try {
                 // Encrypt the word and metadata
                 String encryptedWord = EncryptionService.encryptObject(secretKeyCloud, word);
@@ -412,8 +412,8 @@ public class P2PServer {
                     // If the word exists, update its metadata
                     String existingMetadata = aws3Storage.loadWordMetadata(userId, encryptedWord);
                     // Decrypt the metadata to its original form
-                    Map<String, String> metadata = (Map<String, String>) EncryptionService.decryptObject(secretKeyCloud, existingMetadata);
-                    metadata.putAll(wordMetadata); // Merge existing metadata with the new metadata
+                    Map<String, List<String>> metadata = (Map<String, List<String>>) EncryptionService.decryptObject(secretKeyCloud, existingMetadata);
+                    mergeMetadata(metadata, wordMetadata);
                     String updatedMetadata = EncryptionService.encryptObject(secretKeyCloud, metadata);
                     aws3Storage.saveWordToDic(userId, encryptedWord, updatedMetadata);
                 } else {
@@ -425,8 +425,8 @@ public class P2PServer {
                 if (firebaseStorage.checkWordExistsInDic(userId, encryptedWord)) {
                     String existingMetadata = firebaseStorage.loadWordMetadata(userId, encryptedWord);
                     // Decrypt the metadata to its original form
-                    Map<String, String> metadata = (Map<String, String>) EncryptionService.decryptObject(secretKeyCloud, existingMetadata);
-                    metadata.putAll(wordMetadata);
+                    Map<String, List<String>> metadata = (Map<String, List<String>>) EncryptionService.decryptObject(secretKeyCloud, existingMetadata);
+                    mergeMetadata(metadata, wordMetadata);
                     String updatedMetadata = EncryptionService.encryptObject(secretKeyCloud, metadata);
                     firebaseStorage.saveWordToDic(userId, encryptedWord, updatedMetadata);
                 } else {
@@ -437,8 +437,8 @@ public class P2PServer {
                 if (azureBlobStorage.checkWordExistsInDic(userId, encryptedWord)) {
                     String existingMetadata = azureBlobStorage.loadWordMetadata(userId, encryptedWord);
                     // Decrypt the metadata to its original form
-                    Map<String, String> metadata = (Map<String, String>) EncryptionService.decryptObject(secretKeyCloud, existingMetadata);
-                    metadata.putAll(wordMetadata);
+                    Map<String, List<String>> metadata = (Map<String, List<String>>) EncryptionService.decryptObject(secretKeyCloud, existingMetadata);
+                    mergeMetadata(metadata, wordMetadata);
                     String updatedMetadata = EncryptionService.encryptObject(secretKeyCloud, metadata);
                     azureBlobStorage.saveWordToDic(userId, encryptedWord, updatedMetadata);
                 } else {
@@ -448,6 +448,107 @@ public class P2PServer {
                 System.out.println("Successfully saved or updated word and metadata in dictionaries across all clouds.");
             } catch (Exception e) {
                 System.err.println("Error saving or updating word and metadata in dictionaries: " + e.getMessage());
+                e.printStackTrace();
+            }
+        }
+
+        /**
+         * Merges new metadata into existing metadata without overwriting.
+         *
+         * @param existingMetadata The existing metadata map.
+         * @param newMetadata      The new metadata to add.
+         */
+        private static void mergeMetadata(Map<String, List<String>> existingMetadata, Map<String, List<String>> newMetadata) {
+            for (Map.Entry<String, List<String>> entry : newMetadata.entrySet()) {
+                existingMetadata.computeIfAbsent(entry.getKey(), k -> new ArrayList<>()).addAll(entry.getValue());
+            }
+        }
+
+        /**
+         * Searches for messages containing a specific word across clouds for the current user.
+         * Tries AWS S3 first, then Firebase, and finally Azure Blob Storage if the previous fails.
+         *
+         * @param currentUser The user whose dictionaries will be searched.
+         * @param searchWord  The word to search for.
+         * @return A map where the key is the metadata type (e.g., "messageId", "conversationId", "timestamp"),
+         *         and the value is a list of associated values.
+         */
+        public Map<String, List<String>> searchMessagesByWord(User currentUser, String searchWord) {
+            Map<String, List<String>> searchResults = new HashMap<>();
+            String encryptedSearchWord;
+
+            try {
+                // Encrypt the search word to match cloud storage
+                encryptedSearchWord = EncryptionService.encryptObject(secretKeyCloud, searchWord);
+            } catch (Exception e) {
+                System.err.println("Error encrypting search word: " + e.getMessage());
+                e.printStackTrace();
+                return searchResults; // Return empty results if encryption fails
+            }
+
+            try {
+                // Attempt to retrieve from AWS S3
+                if (aws3Storage.checkWordExistsInDic(currentUser.getUserID(), encryptedSearchWord)) {
+                    String encryptedMetadata = aws3Storage.loadWordMetadata(currentUser.getUserID(), encryptedSearchWord);
+                    mergeSearchResults(searchResults, encryptedMetadata);
+                    System.out.println("Successfully retrieved results from AWS S3.");
+                    return searchResults;
+                }
+            } catch (Exception e) {
+                System.err.println("Error retrieving results from AWS S3: " + e.getMessage());
+                System.out.println("Attempting to retrieve results from Firebase instead...");
+            }
+
+            try {
+                // Attempt to retrieve from Firebase if AWS S3 fails
+                if (firebaseStorage.checkWordExistsInDic(currentUser.getUserID(), encryptedSearchWord)) {
+                    String encryptedMetadata = firebaseStorage.loadWordMetadata(currentUser.getUserID(), encryptedSearchWord);
+                    mergeSearchResults(searchResults, encryptedMetadata);
+                    System.out.println("Successfully retrieved results from Firebase.");
+                    return searchResults;
+                }
+            } catch (Exception e) {
+                System.err.println("Error retrieving results from Firebase: " + e.getMessage());
+                System.out.println("Attempting to retrieve results from Azure Blob Storage instead...");
+            }
+
+            try {
+                // Attempt to retrieve from Azure Blob Storage if both AWS S3 and Firebase fail
+                if (azureBlobStorage.checkWordExistsInDic(currentUser.getUserID(), encryptedSearchWord)) {
+                    String encryptedMetadata = azureBlobStorage.loadWordMetadata(currentUser.getUserID(), encryptedSearchWord);
+                    mergeSearchResults(searchResults, encryptedMetadata);
+                    System.out.println("Successfully retrieved results from Azure Blob Storage.");
+                    return searchResults;
+                }
+            } catch (Exception e) {
+                System.err.println("Error retrieving results from Azure Blob Storage: " + e.getMessage());
+            }
+
+            System.out.println("No results found for word: " + searchWord);
+            return searchResults;
+        }
+
+        /**
+         * Merges search results into the main result map.
+         *
+         * @param result            The main result map to update.
+         * @param encryptedMetadata The encrypted metadata string to decrypt and parse.
+         */
+        private void mergeSearchResults(Map<String, List<String>> result, String encryptedMetadata) {
+            try {
+                // Decrypt the metadata
+                Map<String, List<String>> metadata = (Map<String, List<String>>) EncryptionService.decryptObject(secretKeyCloud, encryptedMetadata);
+
+                // Iterate over the metadata and add values to the result map
+                for (Map.Entry<String, List<String>> entry : metadata.entrySet()) {
+                    String key = entry.getKey(); // Metadata key: messageContent, conversationId, timestamp
+                    List<String> values = entry.getValue(); // List of associated values
+
+                    // Add or merge values into the result map
+                    result.computeIfAbsent(key, k -> new ArrayList<>()).addAll(values);
+                }
+            } catch (Exception e) {
+                System.err.println("Error merging search results: " + e.getMessage());
                 e.printStackTrace();
             }
         }
@@ -616,6 +717,17 @@ public class P2PServer {
 
                         // Save updated conversation to both AWS S3, Firebase and AzureBlob
                         saveConversationClouds(conversationId, newEncryptedConversation, receiver.getUserID());
+                    }
+                    // Split the message content into words and save them in the user's dictionary
+                    try {
+                        String[] words = message.getContent().split("\\s+"); // Split by whitespace
+                        for (String word : words) {
+                            saveWordToDictionary(receiver.getUserID(), word, message.getContent(), conversationId, message.getTimestamp());
+                        }
+                        System.out.println("Words from message content saved to dictionaries.");
+                    } catch (Exception e) {
+                        System.err.println("Error saving words to dictionaries: " + e.getMessage());
+                        e.printStackTrace();
                     }
 
                     // Update the UI to display the received message

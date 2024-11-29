@@ -69,6 +69,8 @@ public class SecureP2PMessagingApp extends Application {
         usernameLabel.setTextFill(Color.BLACK);
         TextField usernameInput = new TextField();
         usernameInput.setPromptText("Enter your username");
+        TextField searchInput = new TextField();
+        searchInput.setPromptText("Enter the word to search");
 
         Label portLabel = new Label("Port:");
         portLabel.setTextFill(Color.BLACK);
@@ -81,6 +83,7 @@ public class SecureP2PMessagingApp extends Application {
         Button conversationsButton = new Button("Conversations");
         Button interestsButton = new Button("Interests");
         Button groupsButton = new Button("Groups");
+        Button searchButton = new Button("Search");
         Button exitButton = new Button("Exit");
 
         // Layout
@@ -130,7 +133,7 @@ public class SecureP2PMessagingApp extends Application {
                 topBar.setStyle("-fx-padding: 10; -fx-background-color: #f0f0f0;");
 
                 // Create sidebar main menu
-                VBox sideBar = new VBox(10, conversationsButton, sendDirectMessageButton, interestsButton, groupsButton, exitButton);
+                VBox sideBar = new VBox(10, conversationsButton, sendDirectMessageButton, interestsButton, groupsButton, searchInput, searchButton, exitButton);
                 sideBar.setAlignment(Pos.TOP_LEFT);
                 sideBar.setStyle("-fx-background-color: #f5f5f5; -fx-padding: 10;");
 
@@ -487,6 +490,83 @@ public class SecureP2PMessagingApp extends Application {
             mainMenuLayout.setCenter(conversationsLayout);
         });
 
+        // Handle search button click
+        searchButton.setOnAction(event -> {
+            String searchWord = searchInput.getText();
+
+            if (searchWord == null || searchWord.isEmpty()) {
+                searchInput.setPromptText("Enter a word to search");
+                return;
+            }
+
+            // Clear the previous results from the center pane
+            mainMenuLayout.setCenter(null);
+
+            // Vertical layout to display search results
+            VBox searchResultsLayout = new VBox(10);
+            searchResultsLayout.setAlignment(Pos.CENTER);
+            searchResultsLayout.setStyle("-fx-background-color: #ffffff; -fx-padding: 20; -fx-border-color: #ccc; -fx-border-width: 1;");
+
+            Label searchHeader = new Label("--- Search Results for: " + searchWord + " ---");
+            searchHeader.setStyle("-fx-font-size: 14; -fx-font-weight: bold; -fx-padding: 10;");
+            searchResultsLayout.getChildren().add(searchHeader);
+
+            VBox resultsBox = new VBox(10);
+            resultsBox.setStyle("-fx-background-color: #e0e0e0; -fx-padding: 10;");
+
+            // Fetch search results from cloud
+            Map<String, List<String>> searchResults = userServer.searchMessagesByWord(currentUser, searchWord);
+
+            if (searchResults.isEmpty()) {
+                Label noResultsLabel = new Label("No messages found for the word: " + searchWord);
+                noResultsLabel.setStyle("-fx-font-size: 12; -fx-text-fill: #555;");
+                searchResultsLayout.getChildren().add(noResultsLabel);
+            } else {
+                // Extract and display search results
+                List<String> messageContents = searchResults.getOrDefault("messageContent", new ArrayList<>());
+                List<String> conversationIds = searchResults.getOrDefault("conversationId", new ArrayList<>());
+                List<String> timestamps = searchResults.getOrDefault("timestamp", new ArrayList<>());
+
+                for (int i = 0; i < messageContents.size(); i++) {
+                    // Safely retrieve conversationId and timestamp (if available)
+                    String messageContent = messageContents.get(i);
+                    String conversationId = i < conversationIds.size() ? conversationIds.get(i) : "Unknown Conversation ID";
+                    String timestamp = i < timestamps.size() ? timestamps.get(i) : "Unknown Timestamp";
+
+                    // Format the timestamp
+                    String formattedTimestamp;
+                    try {
+                        Instant instant = Instant.parse(timestamp);
+                        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+                        formattedTimestamp = instant.atZone(ZoneId.systemDefault()).format(formatter);
+                    } catch (Exception e) {
+                        formattedTimestamp = "Invalid Timestamp";
+                    }
+
+                    // Create a label for each result
+                    Label resultLabel = new Label(
+                            "Conversation ID: " + conversationId + "\n" +
+                            "Timestamp: " + formattedTimestamp + "\n" +
+                            "Message: " + messageContent
+                    );
+
+                    resultLabel.setStyle("-fx-background-color: #ffffff; -fx-border-color: #ccc; -fx-border-width: 1; -fx-padding: 10; -fx-margin: 5;");
+                    resultsBox.getChildren().add(resultLabel);
+                }
+            }
+
+            // Wrap results in a ScrollPane
+            ScrollPane scrollPane = new ScrollPane(resultsBox);
+            scrollPane.setFitToWidth(true);
+            scrollPane.setPrefHeight(400); // Adjust height as necessary
+
+            // Add results to the search layout
+            searchResultsLayout.getChildren().add(scrollPane);
+
+            // Set the search layout to the center of the main layout
+            mainMenuLayout.setCenter(searchResultsLayout);
+        });
+
         exitButton.setOnAction(event -> {
             System.out.println("Exiting...");
             primaryStage.close(); // Close the primary stage to exit the application
@@ -520,18 +600,6 @@ public class SecureP2PMessagingApp extends Application {
                     }
                 }
             }
-            // List<String> interests = currentUser.getInterests().stream()
-            //                          .map(String::toLowerCase)
-            //                          .collect(Collectors.toList());
-            // List<Group> authorizedGroups = new ArrayList<>();
-
-            // // Add to authorizedGroups only the groups with groupID in the user's interests
-            // for (Group group : groups) {
-            //     System.out.println("Group retrived from storage: " + group);
-            //     if (interests.contains(group.getGroupID())) {
-            //         authorizedGroups.add(group);
-            //     }
-            // }
 
             System.out.println("Found " + groups.size() + " authorized groups for " + currentUser.getUserID());
 
