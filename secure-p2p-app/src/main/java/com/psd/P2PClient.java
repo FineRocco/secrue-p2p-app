@@ -137,6 +137,7 @@ public class P2PClient {
         try {
             sslSocketFactory = SSLService.initializeSSLContext(user.getUserID());
 
+            System.out.println("Error connecting to receiver: " + receiver.getPort());
             // Connect to the receiver's IP and port over SSL
             clientSocket = (SSLSocket) sslSocketFactory.createSocket(receiver.getIpAddress(), receiver.getPort());
 

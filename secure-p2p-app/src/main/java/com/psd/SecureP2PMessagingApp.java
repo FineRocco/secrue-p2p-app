@@ -33,6 +33,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 
@@ -48,7 +49,8 @@ public class SecureP2PMessagingApp extends Application {
     private static FirebaseStorage firebaseStorage = FirebaseStorage.getInstance();
     private static AzureBlobStorage azureBlobStorage = AzureBlobStorage.getInstance();
     public List<Group> groups = new ArrayList<>();
-    public List<Conversation> conversations = new ArrayList<>();
+    public Map<String, Conversation> conversationMap = new HashMap<>();
+    public List<String> conversationsIds = new ArrayList<>();
 
     static {
         // Register the Bouncy Castle provider
@@ -324,13 +326,17 @@ public class SecureP2PMessagingApp extends Application {
             for (Map.Entry<String, String> entry : encrpytedConversations.entrySet()) {
                 String conversationId = entry.getKey();
                 String encryptedConversation = entry.getValue();
-
                 try {
+                if(!conversationsIds.contains(conversationId)) {
                     // Decrypt the conversation and add it to the list
                     Conversation conversation = (Conversation) EncryptionService.decryptObject(P2PServer.secretKeyCloud, encryptedConversation);
-                    conversations.add(conversation);
+
+                    conversationsIds.add(conversationId);
+                    conversationMap.put(conversationId, conversation);
 
                     System.out.println("Successfully decrypted conversation with ID: " + conversationId);
+                    }
+
                 } catch (ClassNotFoundException | GeneralSecurityException | IOException e) {
                     System.err.println("Error decrypting conversation with ID: " + conversationId + ": " + e.getMessage());
                     e.printStackTrace();
@@ -343,7 +349,7 @@ public class SecureP2PMessagingApp extends Application {
             conversationsLayout.setStyle("-fx-background-color: #f5f5f5; -fx-padding: 30; -fx-border-color: #ccc;" +
                     " -fx-border-width: 1;");
 
-            if (conversations.isEmpty()) {
+            if (conversationsIds.isEmpty()) {
                 // Display message if no conversations found
                 Label noConversationsLabel = new Label("No conversations found.");
                 conversationsLayout.getChildren().add(noConversationsLabel);
@@ -356,9 +362,9 @@ public class SecureP2PMessagingApp extends Application {
                 ComboBox<String> conversationComboBox = new ComboBox<>();
                 conversationComboBox.setPrefWidth(300);
 
-                Map<String, Conversation> conversationMap = new HashMap<>();
-                for (int i = 0; i < conversations.size(); i++) {
-                    Conversation conversation = conversations.get(i);
+
+                for (int i = 0; i < conversationsIds.size(); i++) {
+                    Conversation conversation = conversationMap.get(conversationsIds.get(i));
                     User participant = conversation.getParticipant1().equals(currentUser) ? conversation.getParticipant2() : conversation.getParticipant1();
 
                     DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");

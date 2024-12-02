@@ -25,26 +25,17 @@ public class Conversation implements Serializable {
      * No-argument constructor required for deserialization.
      * Initializes fields with default values.
      */
-    public Conversation() {
-        this.conversationId = null;
-        this.participant1 = null;
-        this.participant2 = null;
-        this.messages = new ArrayList<>();
-        this.startTime = Instant.now().toString(); // Set the current time as ISO-8601 string
-    }
     
-    public static Conversation createConversation(User participant1, User participant2) {
+    public Conversation(User participant1, User participant2) {
         String conversationId = (participant1.getUserID().compareTo(participant2.getUserID()) < 0)
                 ? participant1.getUserID() + "-" + participant2.getUserID()
                 : participant2.getUserID() + "-" + participant1.getUserID();
-    
-        Conversation conversation = new Conversation();
-        conversation.setConversationId(conversationId);
-        conversation.setParticipant1(participant1);
-        conversation.setParticipant2(participant2);
-        conversation.setStartTime(Instant.now().toString()); // Set the current time
-        conversation.setMessages(new ArrayList<>()); // Initialize an empty list of messages
-        return conversation;
+
+        this.conversationId = conversationId;
+        this.participant1 = participant1;
+        this.participant2 = participant2;
+        this.messages = new ArrayList<>();
+        this.startTime = Instant.now().toString(); // Set the current time as ISO-8601 string
     }    
 
     /**

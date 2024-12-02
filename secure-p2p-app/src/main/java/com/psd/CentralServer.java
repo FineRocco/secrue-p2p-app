@@ -158,10 +158,12 @@ public class CentralServer {
      *
      * @param user The {@link User} object representing the user to be registered.
      */
-    public static synchronized void registerUser(User user) {
+    private static synchronized void registerUser(User user) {
         userRegistry.put(user.getUserID(), user);
         System.out.println("User registered: " + user.getUserID());
     }
+
+
 
     /**
      * Retrieves a user from the registry based on the user ID.
@@ -169,7 +171,7 @@ public class CentralServer {
      * @param userId The unique identifier of the user.
      * @return The {@link User} object if found, or {@code null} if no matching user exists.
      */
-    public static synchronized User getUser(String userId) {
+    private static synchronized User getUser(String userId) {
         return userRegistry.get(userId);
     }
 
@@ -180,7 +182,7 @@ public class CentralServer {
      * @param toSend The {@link User} to whom the information is sent.
      * @param requestedUser The {@link User} whose information is requested. If {@code null}, a '0' is sent.
      */
-    public static void sendUser(User toSend, User requestedUser) {
+    private static void sendUser(User toSend, User requestedUser) {
         try {
             sslSocketFactory = SSLService.initializeSSLContext(requestedUser.getUserID());
             SSLSocket clientSocket = (SSLSocket) sslSocketFactory.createSocket(toSend.getIpAddress(), toSend.getPort());
@@ -221,18 +223,17 @@ public class CentralServer {
 
         @Override
         public void run() {
-            try (DataInputStream dataIn = new DataInputStream(socket.getInputStream());
-                 DataOutputStream dataOut = new DataOutputStream(socket.getOutputStream())) {
+            try (DataInputStream dataIn = new DataInputStream(socket.getInputStream());){
 
                 int requestType = dataIn.readInt(); // Read request type
 
                 switch (requestType) {
                     case 1: // User registration or retrieval
-                        handleUserRequest(dataIn, dataOut);
+                        handleUserRequest(dataIn);
                         break;
 
                     case 2: // User interest update with group members request
-                        handleGroupUpdate(dataIn, dataOut);
+                        handleGroupUpdate(dataIn);
                         break;
 
                     default:
@@ -254,7 +255,7 @@ public class CentralServer {
         /**
          * Handles user registration or retrieval based on received data.
          */
-        private void handleUserRequest(DataInputStream dataIn, DataOutputStream dataOut) throws IOException {
+        private void handleUserRequest(DataInputStream dataIn) throws IOException {
             int nrUsers = dataIn.readInt();
             List<User> users = new ArrayList<>(nrUsers);
 
@@ -276,7 +277,7 @@ public class CentralServer {
          * Handles group updates by adding the received user as a member to all groups 
          * where the group ID matches an interest in the user's list of interests.
          */
-        private void handleGroupUpdate(DataInputStream dataIn, DataOutputStream dataOut) throws IOException {
+        private void handleGroupUpdate(DataInputStream dataIn) throws IOException {
 
             // Read the serialized User object from the input
             int userLength = dataIn.readInt(); // Read the length of the serialized User object
