@@ -19,11 +19,7 @@
 package com.psd;
 
 import com.amazonaws.client.ClientHandler;
-import com.psd.entities.Conversation;
-import com.psd.entities.Group;
-import com.psd.entities.Message;
-import com.psd.entities.MessageGroup;
-import com.psd.entities.User;
+import com.psd.entities.*;
 import com.psd.services.EncryptionService;
 import com.psd.services.SSLService;
 import com.psd.services.SecretSharingService;
@@ -42,6 +38,7 @@ import javax.net.ssl.*;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 
 import java.io.*;
+import java.math.BigInteger;
 import java.net.InetAddress;
 import java.security.GeneralSecurityException;
 import java.security.Security;
@@ -60,7 +57,7 @@ public class P2PServer {
     private static User userAux;
     private final User user;
     private final int port; // The port on which the server listens
-    public static String secretKeyCloud; // The secret key
+    public static BigInteger secretKeyCloud; // The secret key
     private SSLServerSocket serverSocket;
     private volatile boolean running = true; // Will be modified by different threads
     private BorderPane mainMenuLayout; // Reference to the main layout in the JavaFX UI
@@ -69,8 +66,6 @@ public class P2PServer {
     private static AWS3Storage aws3Storage = AWS3Storage.getInstance();
     private static FirebaseStorage firebaseStorage = FirebaseStorage.getInstance();
     private static AzureBlobStorage azureBlobStorage = AzureBlobStorage.getInstance();
-    // Generate and split the key
-    private Map<Integer, String> shares;
         
     static {
         // Register the Bouncy Castle provider
@@ -88,11 +83,17 @@ public class P2PServer {
         this.user = user;
         this.port = user.getPort();
         this.mainMenuLayout = mainMenuLayout;
-        this.shares = SecretSharingService.generateAndSplitKey();
         this.client = new P2PClient(user); // Initialize client
+
+        // Create the user-specific storage if it doesn't exist
+        aws3Storage.createBucketForUser(user.getUserID());
+        firebaseStorage.createUserCollection(user.getUserID());
+        azureBlobStorage.createUserContainerClient(user.getUserID());
+
+        ensureKeySharesExist(user.getUserID()); // Ensure key shares exist in the clouds or creates it
+
         new Thread(this::start).start(); // Start server on a new thread
     }
-
 
 
     /**
@@ -111,8 +112,6 @@ public class P2PServer {
             System.out.println("P2PServer: Created socket with this data: " + serverSocket.getInetAddress().getHostAddress() + ":" + serverSocket.getLocalPort());
 
             System.out.printf("P2PServer started at %s:%d%n", serverSocket.getInetAddress().getHostAddress(), port);
-
-            ensureKeySharesExist(user.getUserID()); // Ensure key shares exist in the clouds or creates it
 
             // Listen for incoming connections
             while (running) {
@@ -176,49 +175,43 @@ public class P2PServer {
             boolean firebaseShareExists = firebaseStorage.checkShareExists(userId, "share2");
             boolean azureShareExists = azureBlobStorage.checkShareExists(userId, "share3");
 
-            // If all shares exist, do nothing
             if (awsShareExists && firebaseShareExists && azureShareExists) {
                 System.out.println("All shares exist. Reconstructing the key...");
 
-                String share1 = aws3Storage.loadKeyShare(userId, "share1");
-                String share2 = firebaseStorage.loadKeyShare(userId, "share2");
-                String share3 = azureBlobStorage.loadKeyShare(userId, "share3");
+                BigInteger share1 = aws3Storage.loadKeyShare(userId, "share1");
+                BigInteger share2 = firebaseStorage.loadKeyShare(userId, "share2");
+                BigInteger share3 = azureBlobStorage.loadKeyShare(userId, "share3");
 
                 // Combine the retrieved shares into a map
-                Map<Integer, String> retrievedShares = Map.of(
-                    1, share1,
-                    2, share2,
-                    3, share3
-                );
+                Share[] retrievedShares = new Share[] {
+                        new Share(BigInteger.valueOf(1), share1),
+                        new Share(BigInteger.valueOf(2), share2),
+                        new Share(BigInteger.valueOf(3), share3)
+                };
 
                 // Reconstruct the key
-                this.secretKeyCloud = SecretSharingService.reconstructKey(retrievedShares);
-                System.out.println("Reconstructed Secret Key: " + P2PServer.secretKeyCloud);
-                return;
+                this.secretKeyCloud = SecretSharingService.combine(retrievedShares);
+                System.out.println("Reconstructed Secret Key: " + this.secretKeyCloud);
             }
+            else {
+                // Generate and split a new key if shares are missing
+                System.out.println("Generating new key and shares...");
+                this.secretKeyCloud = SecretSharingService.generateKey();
+                System.out.println("Generated Secret Key: " + this.secretKeyCloud);
 
-            // Generate and split a new key if shares are missing
-            System.out.println("Generating new key and shares...");
-            Map<Integer, String> shares = SecretSharingService.generateAndSplitKey();
+                Share[] shares = SecretSharingService.shares(secretKeyCloud);
 
-            // Extract the original key (used for your secretKey field)
-            this.secretKeyCloud = SecretSharingService.reconstructKey(shares);
-            System.out.println("Generated Secret Key: " + P2PServer.secretKeyCloud);
+                // Distribute shares to the clouds
 
-            // Distribute shares to the clouds
-            if (!awsShareExists) {
-                aws3Storage.saveKeyShare(userId, "share1", shares.get(1));
+                aws3Storage.saveKeyShare(userId, "share1", shares[0].getShare());
                 System.out.println("Saved share1 to AWS.");
-            }
 
-            if (!firebaseShareExists) {
-                firebaseStorage.saveKeyShare(userId, "share2", shares.get(2));
+                firebaseStorage.saveKeyShare(userId, "share2", shares[1].getShare());
                 System.out.println("Saved share2 to Firebase.");
-            }
 
-            if (!azureShareExists) {
-                azureBlobStorage.saveKeyShare(userId, "share3", shares.get(3));
+                azureBlobStorage.saveKeyShare(userId, "share3", shares[2].getShare());
                 System.out.println("Saved share3 to Azure.");
+
             }
         } catch (Exception e) {
             System.err.println("Error ensuring key shares: " + e.getMessage());
@@ -292,10 +285,10 @@ public class P2PServer {
 
                     // Add message to the conversation
                     conversation.addMessage(message);
-
+                    System.out.println("ola1 ");
                     // Encrypt the new conversation
                     String newEncryptedConversation = EncryptionService.encryptObject(secretKeyCloud, conversation);
-
+                    System.out.println("ola2 ");
                     // Save the encrypted conversation to the clouds
                     saveConversationClouds(conversationId, newEncryptedConversation, sender.getUserID());
                 } else {
@@ -323,7 +316,9 @@ public class P2PServer {
             try {
                 String[] words = message.getContent().split("\\s+"); // Split by whitespace
                 for (String word : words) {
-                    saveWordToDictionary(sender.getUserID(), word, message.getContent(), conversationId, message.getTimestamp());
+                    new Thread(() -> {
+                        saveWordToDictionary(sender.getUserID(), word, message.getContent(), conversationId, message.getTimestamp());
+                    }).start();
                 }
                 System.out.println("Words from message content saved to dictionaries.");
             } catch (Exception e) {
@@ -356,7 +351,7 @@ public class P2PServer {
      *
      * @param userId         The ID of the user whose dictionary the word will be saved to.
      * @param word           The word to save.
-     * @param messageId      The ID of the message containing the word.
+     * @param messageContent The content of the message containing the word.
      * @param conversationId The ID of the conversation where the word was used.
      * @param timestamp      The timestamp when the word was sent.
      */
@@ -734,7 +729,9 @@ public class P2PServer {
                 try {
                     String[] words = message.getContent().split("\\s+"); // Split by whitespace
                     for (String word : words) {
-                        saveWordToDictionary(receiver.getUserID(), word, message.getContent(), conversationId, message.getTimestamp());
+                        new Thread(() -> {
+                            saveWordToDictionary(receiver.getUserID(), word, message.getContent(), conversationId, message.getTimestamp());
+                        }).start();
                     }
                     System.out.println("Words from message content saved to dictionaries.");
                 } catch (Exception e) {
@@ -755,7 +752,6 @@ public class P2PServer {
          * Processes a received group message, adding it to the appropriate group conversation and updating the UI.
          *
          * @param messageGroup The {@link MessageGroup} received from a peer.
-         * @param groupId The unique ID of the group to which the message belongs.
          */
         private void handleMessageGroup(MessageGroup messageGroup) {
             System.out.printf("Received group message from %s:%d for group %s%n",

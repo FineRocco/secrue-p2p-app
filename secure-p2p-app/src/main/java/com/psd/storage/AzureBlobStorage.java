@@ -19,6 +19,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -28,6 +29,7 @@ public class AzureBlobStorage {
     private static AzureBlobStorage instance;
     private final BlobContainerClient groupContainerClient;
     private final BlobServiceClient blobServiceClient;
+    private BlobContainerClient userContainerClient;
 
     /**
      * Constructor to initialize Azure Blob Storage clients for both containers.
@@ -68,16 +70,17 @@ public class AzureBlobStorage {
      * @param userId The ID of the user for whom the container is created.
      * @return The BlobContainerClient for the user's container.
      */
-    public BlobContainerClient getUserContainerClient(String userId) {
+    public void createUserContainerClient(String userId) {
         String containerName = "user-" + userId.toLowerCase();
-        BlobContainerClient userContainerClient = blobServiceClient.getBlobContainerClient(containerName);
+        BlobContainerClient userContainer = blobServiceClient.getBlobContainerClient(containerName);
 
-        if (!userContainerClient.exists()) {
-            userContainerClient.create();
+        if (!userContainer.exists()) {
+            userContainer.create();
             System.out.println("Created container: " + containerName);
+        }else {
+            System.out.println("Container already exists for user: " + userId);
         }
-
-        return userContainerClient;
+        userContainerClient = userContainer;
     }
 
     // ------------------ Key Share Methods ------------------ //
@@ -89,14 +92,12 @@ public class AzureBlobStorage {
      * @param shareId  The unique identifier for the share.
      * @param shareData The share data as a Base64-encoded string.
      */
-    public void saveKeyShare(String userId, String shareId, String shareData) {
+    public void saveKeyShare(String userId, String shareId, BigInteger shareData) {
         try {
-            // Get or create the user's container
-            BlobContainerClient userContainerClient = getUserContainerClient(userId);
 
             // Save the share data to a blob
             BlobClient blobClient = userContainerClient.getBlobClient("shares/" + shareId); // Store shares in a "shares" folder
-            byte[] shareBytes = shareData.getBytes();
+            byte[] shareBytes = shareData.toByteArray();
             InputStream inputStream = new ByteArrayInputStream(shareBytes);
 
             blobClient.upload(inputStream, shareBytes.length, true);
@@ -113,10 +114,8 @@ public class AzureBlobStorage {
      * @param shareId The unique identifier for the share.
      * @return The share data as a Base64-encoded string, or {@code null} if the share does not exist.
      */
-    public String loadKeyShare(String userId, String shareId) {
+    public BigInteger loadKeyShare(String userId, String shareId) {
         try {
-            // Get the user's container
-            BlobContainerClient userContainerClient = getUserContainerClient(userId);
 
             // Retrieve the blob containing the share data
             BlobClient blobClient = userContainerClient.getBlobClient("shares/" + shareId);
@@ -128,8 +127,8 @@ public class AzureBlobStorage {
 
             try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
                 blobClient.downloadStream(outputStream);
-                String shareData = new String(outputStream.toByteArray());
-                System.out.println("Loaded key share: " + shareId + " for user: " + userId);
+                BigInteger shareData = new BigInteger(outputStream.toByteArray());
+
                 return shareData;
             }
         } catch (Exception e) {
@@ -148,9 +147,6 @@ public class AzureBlobStorage {
      */
     public boolean checkShareExists(String userId, String shareId) {
         try {
-            // Get the user's container
-            BlobContainerClient userContainerClient = getUserContainerClient(userId);
-
             // Check if the blob exists
             BlobClient blobClient = userContainerClient.getBlobClient("shares/" + shareId);
             boolean exists = blobClient.exists();
@@ -171,9 +167,6 @@ public class AzureBlobStorage {
      */
     public boolean checkDicExists(String userId) {
         try {
-            // Get the user's container
-            BlobContainerClient userContainerClient = getUserContainerClient(userId);
-
             // Check if any blob exists under the `dictionaries/` prefix
             PagedIterable<BlobItem> blobs = userContainerClient.listBlobsByHierarchy("dictionaries/");
             if (blobs.iterator().hasNext()) {
@@ -196,9 +189,6 @@ public class AzureBlobStorage {
      */
     public void createDictionariesFolder(String userId) {
         try {
-            // Get the user's container
-            BlobContainerClient userContainerClient = getUserContainerClient(userId);
-
             // Create a dummy blob to initialize the `dictionaries` folder
             BlobClient blobClient = userContainerClient.getBlobClient("dictionaries/init");
             byte[] dummyData = "init".getBytes();
@@ -222,9 +212,6 @@ public class AzureBlobStorage {
      */
     public void saveWordToDic(String userId, String encryptedWord, String encryptedMetadata) {
         try {
-            // Get the user's container
-            BlobContainerClient userContainerClient = getUserContainerClient(userId);
-
             // Construct the blob path for the encrypted word
             BlobClient blobClient = userContainerClient.getBlobClient("dictionaries/" + encryptedWord);
 
@@ -254,9 +241,6 @@ public class AzureBlobStorage {
      */
     public boolean checkWordExistsInDic(String userId, String encryptedWord) {
         try {
-            // Get the user's container
-            BlobContainerClient userContainerClient = getUserContainerClient(userId);
-
             // Get the blob client for the specific word
             BlobClient blobClient = userContainerClient.getBlobClient("dictionaries/" + encryptedWord);
 
@@ -279,9 +263,6 @@ public class AzureBlobStorage {
      */
     public String loadWordMetadata(String userId, String encryptedWord) {
         try {
-            // Get the user's container
-            BlobContainerClient userContainerClient = getUserContainerClient(userId);
-
             // Construct the path to the encrypted word blob
             BlobClient blobClient = userContainerClient.getBlobClient("dictionaries/" + encryptedWord);
 
@@ -312,7 +293,6 @@ public class AzureBlobStorage {
      * @param userId The ID of the user for whom the conversation is saved.
      */
     public void saveEncryptedConversation(String conversationKey, String encryptedConversation, String userId) {
-        BlobContainerClient userContainerClient = getUserContainerClient(userId);
 
         try {
             // Convert the encrypted conversation string to bytes
@@ -338,8 +318,6 @@ public class AzureBlobStorage {
      * @return The encrypted conversation as a string, or null if not found.
      */
     public String loadEncryptedConversation(String conversationKey, String userId) {
-        BlobContainerClient userContainerClient = getUserContainerClient(userId);
-
         BlobClient blobClient = userContainerClient.getBlobClient(conversationKey);
         if (!blobClient.exists()) {
             System.out.println("Encrypted conversation with key " + conversationKey + " not found for user " + userId);
@@ -370,8 +348,6 @@ public class AzureBlobStorage {
      * @return A map where the key is the conversation ID and the value is the encrypted data as a string.
      */
     public Map<String, String> listAllEncryptedConversations(String userId) {
-        BlobContainerClient userContainerClient = getUserContainerClient(userId);
-
         Map<String, String> encryptedConversations = new HashMap<>();
         for (BlobItem blobItem : userContainerClient.listBlobs()) {
             String conversationId = blobItem.getName();
@@ -414,8 +390,6 @@ public class AzureBlobStorage {
      * @param userId The ID of the user for whom the conversation is deleted.
      */
     public void deleteEncryptedConversation(String conversationKey, String userId) {
-        BlobContainerClient userContainerClient = getUserContainerClient(userId);
-
         BlobClient blobClient = userContainerClient.getBlobClient(conversationKey);
         if (blobClient.exists()) {
             blobClient.delete();

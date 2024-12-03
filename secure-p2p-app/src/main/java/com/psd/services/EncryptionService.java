@@ -4,6 +4,7 @@ import javax.crypto.Cipher;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
 import java.io.*;
+import java.math.BigInteger;
 import java.security.GeneralSecurityException;
 import java.util.Base64;
 
@@ -20,21 +21,23 @@ public class EncryptionService {
      * @throws GeneralSecurityException If an error occurs during encryption.
      * @throws IOException              If an error occurs during serialization.
      */
-    public static String encryptObject(String secretKey, Object object) throws GeneralSecurityException, IOException {
+    public static String encryptObject(BigInteger secretKey, Object object) throws GeneralSecurityException, IOException {
         // Convert Base64-encoded key to SecretKey
-        byte[] decodedKey = Base64.getDecoder().decode(secretKey);
+        byte[] decodedKey = secretKey.toByteArray();
         SecretKey key = new SecretKeySpec(decodedKey, 0, decodedKey.length, ALGORITHM);
 
         // Serialize the object to bytes
         ByteArrayOutputStream byteStream = new ByteArrayOutputStream();
         try (ObjectOutputStream objectStream = new ObjectOutputStream(byteStream)) {
             objectStream.writeObject(object);
+
         }
 
         byte[] serializedData = byteStream.toByteArray();
 
         // Encrypt the serialized data
         Cipher cipher = Cipher.getInstance(ALGORITHM);
+
         cipher.init(Cipher.ENCRYPT_MODE, key);
         byte[] encryptedData = cipher.doFinal(serializedData);
 
@@ -52,9 +55,9 @@ public class EncryptionService {
      * @throws IOException              If an error occurs during deserialization.
      * @throws ClassNotFoundException   If the object's class is not found.
      */
-    public static Object decryptObject(String secretKey, String encryptedObject) throws GeneralSecurityException, IOException, ClassNotFoundException {
+    public static Object decryptObject(BigInteger secretKey, String encryptedObject) throws GeneralSecurityException, IOException, ClassNotFoundException {
         // Convert Base64-encoded key to SecretKey
-        byte[] decodedKey = Base64.getDecoder().decode(secretKey);
+        byte[] decodedKey = secretKey.toByteArray();
         SecretKey key = new SecretKeySpec(decodedKey, 0, decodedKey.length, ALGORITHM);
 
         // Decode the Base64-encoded encrypted object

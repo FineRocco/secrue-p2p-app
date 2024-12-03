@@ -22,6 +22,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.HashMap;
@@ -85,13 +86,11 @@ public class AWS3Storage {
      * @param shareId The unique identifier for the share.
      * @param shareData The share data as a Base64-encoded string.
      */
-    public void saveKeyShare(String userId, String shareId, String shareData) {
+    public void saveKeyShare(String userId, String shareId, BigInteger shareData) {
         try {
-            // Create the user-specific bucket if it doesn't exist
-            createBucketForUser(userId);
 
             // Prepare the data for upload
-            byte[] shareBytes = shareData.getBytes();
+            byte[] shareBytes = shareData.toByteArray();
             InputStream inputStream = new ByteArrayInputStream(shareBytes);
             ObjectMetadata metadata = new ObjectMetadata();
             metadata.setContentLength(shareBytes.length);
@@ -122,7 +121,7 @@ public class AWS3Storage {
 
             // Check if the object exists in the bucket
             boolean exists = s3Client.doesObjectExist(bucketName, objectKey);
-            System.out.println("Checked share existence: " + objectKey + " in bucket: " + bucketName + " - Exists: " + exists);
+            System.out.println("Checked share existence: " + shareId + " in bucket: " + bucketName + " - Exists: " + exists);
             return exists;
         } catch (Exception e) {
             System.err.println("Error checking share existence: " + e.getMessage());
@@ -138,7 +137,7 @@ public class AWS3Storage {
      * @return The share data as a Base64-encoded string, or {@code null} if the share does not exist.
      * @throws IOException If an error occurs during the loading process.
      */
-    public String loadKeyShare(String userId, String shareId) throws IOException {
+    public BigInteger loadKeyShare(String userId, String shareId) throws IOException {
         try {
             String bucketName = "psd-" + userId.toLowerCase();
             String objectKey = "shares/" + shareId; // Shares are stored in the 'shares' folder
@@ -154,7 +153,7 @@ public class AWS3Storage {
 
             // Read the object's content into a string
             try (InputStream inputStream = s3Object.getObjectContent()) {
-                return new String(inputStream.readAllBytes());
+                return new BigInteger(inputStream.readAllBytes());
             }
         } catch (Exception e) {
             System.err.println("Error loading key share: " + e.getMessage());

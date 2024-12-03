@@ -122,10 +122,6 @@ public class SecureP2PMessagingApp extends Application {
                 currentUser = new User(userName, ipAddress, userPort);
                 userServer = new P2PServer(currentUser, mainMenuLayout);
 
-                aws3Storage.createBucketForUser(currentUser.getUserID());
-                azureBlobStorage.getUserContainerClient(currentUser.getUserID());
-                firebaseStorage.createUserCollection(currentUser.getUserID());
-
                 Label userDetailsLabel = new Label("User: " + userName + ", IP = " + ipAddress + ":" + userPort);
                 userDetailsLabel.setTextFill(Color.DARKGRAY);
 

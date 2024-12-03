@@ -16,6 +16,7 @@ import com.psd.entities.User;
 
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -40,7 +41,7 @@ public class FirebaseStorage {
                         .build();
 
                 FirebaseApp.initializeApp(options);
-                System.out.println("Firebase successfully initialized.");
+
             }
             db = FirestoreClient.getFirestore();
         } catch (IOException e) {
@@ -91,7 +92,7 @@ public class FirebaseStorage {
      * @param shareId  The unique identifier for the share.
      * @param shareData The share data as a Base64-encoded string.
      */
-    public void saveKeyShare(String userId, String shareId, String shareData) {
+    public void saveKeyShare(String userId, String shareId, BigInteger shareData) {
         try {
             String collectionName = "user_" + userId;
             DocumentReference docRef = db.collection(collectionName).document("shares_" + shareId);
@@ -99,7 +100,7 @@ public class FirebaseStorage {
             // Save the share data
             Map<String, Object> share = new HashMap<>();
             share.put("shareId", shareId);
-            share.put("data", shareData);
+            share.put("data", shareData.toString());
             docRef.set(share).get();
 
             System.out.println("Key share saved successfully: " + shareId + " for user: " + userId);
@@ -115,7 +116,7 @@ public class FirebaseStorage {
      * @param shareId The unique identifier for the share.
      * @return The share data as a Base64-encoded string, or {@code null} if the share does not exist.
      */
-    public String loadKeyShare(String userId, String shareId) {
+    public BigInteger loadKeyShare(String userId, String shareId) {
         try {
             String collectionName = "user_" + userId;
             DocumentReference docRef = db.collection(collectionName).document("shares_" + shareId);
@@ -123,7 +124,7 @@ public class FirebaseStorage {
             // Retrieve the share data
             DocumentSnapshot document = docRef.get().get();
             if (document.exists()) {
-                return document.getString("data");
+                return new BigInteger(document.getString("data")) ;
             } else {
                 System.out.println("Share not found: " + shareId + " for user: " + userId);
                 return null;
