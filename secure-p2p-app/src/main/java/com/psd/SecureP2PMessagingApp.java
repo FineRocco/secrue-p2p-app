@@ -323,15 +323,15 @@ public class SecureP2PMessagingApp extends Application {
                 String conversationId = entry.getKey();
                 String encryptedConversation = entry.getValue();
                 try {
-                if(!conversationsIds.contains(conversationId)) {
-                    // Decrypt the conversation and add it to the list
+                    // Decrypt the conversation
                     Conversation conversation = (Conversation) EncryptionService.decryptObject(P2PServer.secretKeyCloud, encryptedConversation);
 
-                    conversationsIds.add(conversationId);
-                    conversationMap.put(conversationId, conversation);
-
-                    System.out.println("Successfully decrypted conversation with ID: " + conversationId);
+                    if(!conversationsIds.contains(conversationId)) {
+                        conversationsIds.add(conversationId);
+                        System.out.println("Successfully decrypted conversation with ID: " + conversationId);
                     }
+
+                    conversationMap.put(conversationId, conversation);
 
                 } catch (ClassNotFoundException | GeneralSecurityException | IOException e) {
                     System.err.println("Error decrypting conversation with ID: " + conversationId + ": " + e.getMessage());

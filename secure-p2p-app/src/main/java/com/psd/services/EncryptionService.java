@@ -41,8 +41,8 @@ public class EncryptionService {
         cipher.init(Cipher.ENCRYPT_MODE, key);
         byte[] encryptedData = cipher.doFinal(serializedData);
 
-        // Return the encrypted data as a Base64-encoded string
-        return Base64.getEncoder().encodeToString(encryptedData);
+        // Return the encrypted data as a Base64-encoded string with '/' thanks to the Url encoder
+        return Base64.getUrlEncoder().encodeToString(encryptedData);
     }
 
     /**
@@ -61,7 +61,7 @@ public class EncryptionService {
         SecretKey key = new SecretKeySpec(decodedKey, 0, decodedKey.length, ALGORITHM);
 
         // Decode the Base64-encoded encrypted object
-        byte[] encryptedData = Base64.getDecoder().decode(encryptedObject);
+        byte[] encryptedData = Base64.getUrlDecoder().decode(encryptedObject);
 
         // Decrypt the data
         Cipher cipher = Cipher.getInstance(ALGORITHM);

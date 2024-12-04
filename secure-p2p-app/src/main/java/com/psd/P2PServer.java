@@ -285,10 +285,10 @@ public class P2PServer {
 
                     // Add message to the conversation
                     conversation.addMessage(message);
-                    System.out.println("ola1 ");
+
                     // Encrypt the new conversation
                     String newEncryptedConversation = EncryptionService.encryptObject(secretKeyCloud, conversation);
-                    System.out.println("ola2 ");
+
                     // Save the encrypted conversation to the clouds
                     saveConversationClouds(conversationId, newEncryptedConversation, sender.getUserID());
                 } else {
