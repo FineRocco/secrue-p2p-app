@@ -23,7 +23,6 @@
  */
 package com.psd;
 
-import com.psd.entities.Group;
 import com.psd.entities.User;
 import com.psd.services.SSLService;
 import com.psd.services.SerializationService;
@@ -31,7 +30,6 @@ import com.psd.storage.AWS3Storage;
 import com.psd.storage.AzureBlobStorage;
 import com.psd.storage.FirebaseStorage;
 
-import javax.crypto.SecretKey;
 import javax.net.ssl.*;
 
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
@@ -39,10 +37,7 @@ import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import java.io.*;
 import java.net.InetAddress;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.security.Security;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -66,7 +61,6 @@ public class CentralServer {
         // Load SSL context
         SSLService.initializeServerKeys("server");
         SSLService.initializeServerTruststore();
-        initializeSSLGroups();
         sslServerSocketFactory = SSLService.initializeServerSSLContext("server");
         if (sslServerSocketFactory == null) {
             System.out.println("Failed to create SSL server socket factory.");
@@ -74,61 +68,6 @@ public class CentralServer {
         }
 
         startServer(sslServerSocketFactory);
-    }
-
-    /**
-     * Initializes predefined groups with their topics, trustStores, and encryption keys.
-     */
-    private static void initializeSSLGroups() {
-        List<String> groupIDs = Arrays.asList("football", "ufc", "basketball");
-
-        for (String groupID : groupIDs) {
-            try {
-                List<Group> groups = new ArrayList<>();
-                try {
-                    // Attempt to retrieve all groups for the current user from AWS S3
-                    groups = aws3Storage.getAllGroups();
-                    System.out.println("Successfully retrieved groups from AWS S3.");
-                } catch (Exception awsException) {
-                    System.err.println("Error retrieving groups from AWS S3: " + awsException.getMessage());
-                    
-                    // Attempt to retrieve from Firebase if AWS S3 fails
-                    System.out.println("Attempting to retrieve groups from Firebase instead...");
-                    try {
-                        groups = firebaseStorage.getAllGroups();
-                        System.out.println("Successfully retrieved groups from Firebase.");
-                    } catch (Exception firebaseException) {
-                        System.err.println("Error retrieving groups from Firebase: " + firebaseException.getMessage());
-                        
-                        // If both AWS S3 and Firebase retrieval fail, attempt Azure Blob Storage
-                        System.out.println("Attempting to retrieve groups from Azure Blob Storage instead...");
-                        try {
-                            groups = azureBlobStorage.getAllGroups();
-                            System.out.println("Successfully retrieved groups from Azure Blob Storage.");
-                        } catch (Exception azureException) {
-                            System.err.println("Error retrieving groups from Azure Blob Storage: " + azureException.getMessage());
-                        }
-                    }
-                }
-                List<Group> Finalgroups = groups;
-                for (Group group : Finalgroups) {
-                    if (group.getGroupID().equals(groupID)) {
-                        System.out.println("Group " + groupID + " already exists.");
-                        continue;
-                    }else {
-                    // Create a new group instance with the topic
-                    Group newGroup = new Group(groupID, new ArrayList<>());
-
-                    // Save the group to all storages (without the SecretKey)
-                    aws3Storage.saveGroup(groupID, newGroup);
-                    firebaseStorage.saveGroup(groupID, newGroup);
-                    azureBlobStorage.saveGroup(groupID, newGroup);
-                    }
-             }
-            } catch (IOException e) {
-                System.err.println("Error initializing group " + groupID + ": " + e.getMessage());
-            }
-        }
     }
 
     /**
@@ -227,18 +166,8 @@ public class CentralServer {
 
                 int requestType = dataIn.readInt(); // Read request type
 
-                switch (requestType) {
-                    case 1: // User registration or retrieval
-                        handleUserRequest(dataIn);
-                        break;
+                handleUserRequest(dataIn);
 
-                    case 2: // User interest update with group members request
-                        handleGroupUpdate(dataIn);
-                        break;
-
-                    default:
-                        System.out.println("Unknown request type: " + requestType);
-                }
 
             } catch (IOException e) {
                 System.out.println("Client handler error: " + e.getMessage());
@@ -270,69 +199,6 @@ public class CentralServer {
                 registerUser(users.get(0));
             } else {
                 sendUser(users.get(0), getUser(users.get(1).getUserID()));
-            }
-        }
-
-        /**
-         * Handles group updates by adding the received user as a member to all groups 
-         * where the group ID matches an interest in the user's list of interests.
-         */
-        private void handleGroupUpdate(DataInputStream dataIn) throws IOException {
-
-            // Read the serialized User object from the input
-            int userLength = dataIn.readInt(); // Read the length of the serialized User object
-            byte[] userBytes = new byte[userLength];
-            dataIn.readFully(userBytes); // Read the User object bytes fully
-            User user = (User) SerializationService.deserialize(userBytes); // Deserialize the User object
-
-            System.out.println("Received group update request for user: " + user.getUserID());
-
-            List<Group> groupsStorage = new ArrayList<>();
-            try {
-                // Attempt to retrieve all groups for the current user from AWS S3
-                groupsStorage = aws3Storage.getAllGroups();
-                System.out.println("Successfully retrieved groups from AWS S3.");
-            } catch (Exception awsException) {
-                System.err.println("Error retrieving groups from AWS S3: " + awsException.getMessage());
-                
-                // Attempt to retrieve from Firebase if AWS S3 fails
-                System.out.println("Attempting to retrieve groups from Firebase instead...");
-                try {
-                    groupsStorage = firebaseStorage.getAllGroups();
-                    System.out.println("Successfully retrieved groups from Firebase.");
-                } catch (Exception firebaseException) {
-                    System.err.println("Error retrieving groups from Firebase: " + firebaseException.getMessage());
-                    
-                    // If both AWS S3 and Firebase retrieval fail, attempt Azure Blob Storage
-                    System.out.println("Attempting to retrieve groups from Azure Blob Storage instead...");
-                    try {
-                        groupsStorage = azureBlobStorage.getAllGroups();
-                        System.out.println("Successfully retrieved groups from Azure Blob Storage.");
-                    } catch (Exception azureException) {
-                        System.err.println("Error retrieving groups from Azure Blob Storage: " + azureException.getMessage());
-                    }
-                }
-            }
-
-            // Iterate over the user's interests and add the user as a member to matching groups
-            System.out.println("Interests from user after sending to CentralServer: " + user.getInterests());
-            for (String interest : user.getInterests()) {
-
-                for (Group group : groupsStorage) {
-                    if (group.getGroupID().equals(interest)) {
-                        // Check if the user is already a member; if not, add them
-                        if (!group.getMembers().contains(user)) {
-                            group.addMember(user);
-                            System.out.println("Added " + user.getUserID() + " as a member to group: " + interest);
-
-                            // Save the updated group to all storage backends (without the SecretKey)
-                            aws3Storage.saveGroup(interest.toLowerCase(), group);
-                            firebaseStorage.saveGroup(interest.toLowerCase(), group);
-                            azureBlobStorage.saveGroup(interest.toLowerCase(), group);
-
-                        }
-                    }
-                }
             }
         }
     

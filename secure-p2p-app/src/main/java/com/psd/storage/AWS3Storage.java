@@ -7,32 +7,22 @@ import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import com.amazonaws.services.s3.model.ListObjectsV2Request;
 import com.amazonaws.services.s3.model.ListObjectsV2Result;
-import com.amazonaws.services.s3.model.ObjectListing;
 import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.amazonaws.services.s3.model.S3Object;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.psd.entities.Group;
 import com.psd.entities.User;
-import com.psd.services.EncryptionService;
-import com.psd.services.SerializationService;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.math.BigInteger;
-import java.util.ArrayList;
-import java.util.Base64;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 public class AWS3Storage {
     private static AWS3Storage instance;
     private final AmazonS3 s3Client;
-    private final String groupBucketName = "psdgroups";
 
     /**
      * Constructor to initialize AWS S3 client with the specified credentials.
@@ -380,97 +370,5 @@ public class AWS3Storage {
         } catch (Exception e) {
             System.err.println("Error deleting encrypted conversation: " + e.getMessage());
         }
-    }
-
-    // ------------------ Group Methods ------------------ //
-
-    public void saveGroup(String groupId, Group group) throws IOException {
-        byte[] groupBytes = SerializationService.serialize(group);
-        InputStream inputStream = new ByteArrayInputStream(groupBytes);
-        ObjectMetadata metadata = new ObjectMetadata();
-        metadata.setContentLength(groupBytes.length);
-
-        s3Client.putObject(groupBucketName, groupId, inputStream, metadata);
-    }
-
-    public Group loadGroup(String groupId) throws IOException {
-        if (!s3Client.doesObjectExist(groupBucketName, groupId)) {
-            return null;
-        }
-
-        S3Object s3Object = s3Client.getObject(groupBucketName, groupId);
-        try (InputStream inputStream = s3Object.getObjectContent()) {
-            ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-            byte[] buffer = new byte[1024];
-            int length;
-            while ((length = inputStream.read(buffer)) != -1) {
-                byteArrayOutputStream.write(buffer, 0, length);
-            }
-
-            byte[] groupBytes = byteArrayOutputStream.toByteArray();
-            return (Group) SerializationService.deserialize(groupBytes);
-        }
-    }
-
-
-    public List<String> listAllgroupIds() {
-        List<String> keys = new ArrayList<>();
-        ListObjectsV2Request req = new ListObjectsV2Request().withBucketName(groupBucketName);
-        ListObjectsV2Result result;
-
-        do {
-            result = s3Client.listObjectsV2(req);
-            for (S3ObjectSummary objectSummary : result.getObjectSummaries()) {
-                keys.add(objectSummary.getKey());
-            }
-            req.setContinuationToken(result.getNextContinuationToken());
-        } while (result.isTruncated());
-
-        return keys;
-    }
-
-    public List<Group> getAllGroups() {
-        List<Group> groups = new ArrayList<>();
-        List<String> allIds = listAllgroupIds();
-
-        for (String key : allIds) {
-            try {
-                Group group = loadGroup(key);
-                if (group != null) {
-                    groups.add(group);
-                }
-            } catch (IOException e) {
-                System.err.println("Error loading group for key " + key + ": " + e.getMessage());
-            }
-        }
-        return groups;
-    }
-
-    /**
-     * Retrieves all groups where the specified user is a member.
-     *
-     * @param currentUser The user whose group memberships should be checked.
-     * @return A list of Group objects where the specified user is a member.
-     */
-    public List<Group> getAllGroupsWithMember(User currentUser) {
-        List<Group> userGroups = new ArrayList<>();
-        List<String> allIds = listAllgroupIds();
-        System.out.println("All group ids: " + allIds);
-    
-        for (String id : allIds) {
-            try {
-                Group group = loadGroup(id);
-                if (group != null && group.getMembers().contains(currentUser)) {
-                    userGroups.add(group);
-                }
-            } catch (IOException e) {
-                System.err.println("Error loading group for key " + id + ": " + e.getMessage());
-            }
-        }
-        return userGroups;
-    }
-
-    public void deleteGroup(String groupId) {
-        s3Client.deleteObject(groupBucketName, groupId);
     }
 }

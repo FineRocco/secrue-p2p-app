@@ -9,9 +9,6 @@ import com.azure.storage.blob.BlobContainerClientBuilder;
 import com.azure.storage.blob.BlobServiceClient;
 import com.azure.storage.blob.BlobServiceClientBuilder;
 import com.azure.storage.blob.models.BlobItem;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.psd.entities.Conversation;
-import com.psd.entities.Group;
 import com.psd.entities.User;
 import com.psd.services.SerializationService;
 
@@ -397,86 +394,5 @@ public class AzureBlobStorage {
         } else {
             System.out.println("Encrypted conversation with key " + conversationKey + " does not exist for user " + userId);
         }
-    }
-
-    // ------------------ Group Methods ------------------ //
-
-    public void saveGroup(String groupKey, Group group) throws IOException {
-        byte[] groupBytes = SerializationService.serialize(group);
-        InputStream inputStream = new ByteArrayInputStream(groupBytes);
-
-        BlobClient blobClient = groupContainerClient.getBlobClient(groupKey);
-        blobClient.upload(inputStream, groupBytes.length, true);
-    }
-
-    public Group loadGroup(String groupKey) throws IOException {
-        BlobClient blobClient = groupContainerClient.getBlobClient(groupKey);
-        if (!blobClient.exists()) {
-            return null;
-        }
-
-        try (InputStream inputStream = blobClient.openInputStream();
-             ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
-            byte[] buffer = new byte[1024];
-            int length;
-            while ((length = inputStream.read(buffer)) != -1) {
-                outputStream.write(buffer, 0, length);
-            }
-
-            return (Group) SerializationService.deserialize(outputStream.toByteArray());
-        }
-    }
-
-    /**
-     * Retrieves all groups where the specified user is a member.
-     *
-     * @param currentUser The user whose group memberships should be checked.
-     * @return A list of Group objects where the specified user is a member.
-     */
-    public List<Group> getAllGroupsWithMember(User currentUser) {
-        List<Group> userGroups = new ArrayList<>();
-        List<String> allKeys = listAllGroupKeys();
-    
-        for (String key : allKeys) {
-            try {
-                Group group = loadGroup(key);
-                if (group != null && group.getMembers().contains(currentUser)) {
-                    userGroups.add(group);
-                }
-            } catch (IOException e) {
-                System.err.println("Error loading group for key " + key + ": " + e.getMessage());
-            }
-        }
-        return userGroups;
-    }
-
-    public List<String> listAllGroupKeys() {
-        List<String> keys = new ArrayList<>();
-        for (BlobItem blobItem : groupContainerClient.listBlobs()) {
-            keys.add(blobItem.getName());
-        }
-        return keys;
-    }
-
-    public List<Group> getAllGroups() {
-        List<Group> groups = new ArrayList<>();
-        List<String> allKeys = listAllGroupKeys();
-
-        for (String key : allKeys) {
-            try {
-                Group group = loadGroup(key);
-                if (group != null) {
-                    groups.add(group);
-                }
-            } catch (IOException e) {
-                System.err.println("Error loading group for key " + key + ": " + e.getMessage());
-            }
-        }
-        return groups;
-    }
-
-    public void deleteGroup(String groupKey) {
-        BlobClient blobClient = groupContainerClient.getBlobClient(groupKey);
-        blobClient.delete();
     }
 }

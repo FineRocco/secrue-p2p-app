@@ -10,8 +10,6 @@ import com.google.cloud.firestore.DocumentReference;
 import com.google.cloud.firestore.DocumentSnapshot;
 import com.google.cloud.firestore.QueryDocumentSnapshot;
 import com.google.cloud.firestore.QuerySnapshot;
-import com.psd.entities.Conversation;
-import com.psd.entities.Group;
 import com.psd.entities.User;
 
 import java.io.FileInputStream;
@@ -423,97 +421,5 @@ public class FirebaseStorage {
         }
 
         return encryptedConversations;
-    }
-
-     // ------------------ Group Methods ------------------ //
-
-     public void saveGroup(String groupKey, Group group) throws IOException {
-        try {
-            db.collection("groups")
-            .document(groupKey)
-            .set(group)
-            .get();
-            System.out.println("Group saved with ID: " + groupKey);
-        } catch (InterruptedException | ExecutionException e) {
-            throw new IOException("Error saving group to Firebase: " + e.getMessage());
-        }
-    }
-
-    public Group loadGroup(String groupKey) throws IOException {
-        DocumentReference docRef = db.collection("groups").document(groupKey);
-        try {
-            DocumentSnapshot document = docRef.get().get();
-            if (document.exists()) {
-                return document.toObject(Group.class);
-            } else {
-                System.out.println("No group found with ID: " + groupKey);
-                return null;
-            }
-        } catch (InterruptedException | ExecutionException e) {
-            throw new IOException("Error loading group from Firebase: " + e.getMessage());
-        }
-    }
-
-    public List<String> listAllGroupIds() {
-        List<String> ids = new ArrayList<>();
-        try {
-            CollectionReference groups = db.collection("groups");
-            QuerySnapshot snapshot = groups.get().get();
-            for (QueryDocumentSnapshot document : snapshot) {
-                ids.add(document.getId());
-            }
-        } catch (InterruptedException | ExecutionException e) {
-            System.err.println("Error listing groups: " + e.getMessage());
-        }
-        return ids;
-    }
-    
-    /**
-     * Retrieves all groups where the specified user is a member.
-     *
-     * @param currentUser The user whose group memberships should be checked.
-     * @return A list of Group objects where the specified user is a member.
-     */
-    public List<Group> getAllGroupsWithMember(User currentUser) {
-        List<Group> userGroups = new ArrayList<>();
-        try {
-            List<QueryDocumentSnapshot> allDocuments = db.collection("groups").get().get().getDocuments();
-            System.out.println("Retrieved all group documents from Firebase: " + allDocuments.size());
-    
-            for (QueryDocumentSnapshot document : allDocuments) {
-                Group group = document.toObject(Group.class);
-                if (group != null && group.getMembers().contains(currentUser)) {
-                    userGroups.add(group);
-                }
-            }
-        } catch (InterruptedException | ExecutionException e) {
-            System.err.println("Error retrieving groups from Firebase: " + e.getMessage());
-        }
-        return userGroups;
-    }
-
-    public List<Group> getAllGroups() {
-        List<Group> groups = new ArrayList<>();
-        try {
-            List<QueryDocumentSnapshot> allDocuments = db.collection("groups").get().get().getDocuments();
-            System.out.println("Retrieved all group documents from Firebase: " + allDocuments.size());
-
-            for (QueryDocumentSnapshot document : allDocuments) {
-                Group group = document.toObject(Group.class);
-                groups.add(group);
-            }
-        } catch (InterruptedException | ExecutionException e) {
-            System.err.println("Error retrieving groups from Firebase: " + e.getMessage());
-        }
-        return groups;
-    }
-
-    public void deleteGroup(String groupId) {
-        try {
-            db.collection("groups").document(groupId).delete().get();
-            System.out.println("Group deleted with ID: " + groupId);
-        } catch (InterruptedException | ExecutionException e) {
-            System.err.println("Error deleting group: " + e.getMessage());
-        }
     }
 }
