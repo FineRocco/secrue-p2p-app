@@ -169,6 +169,7 @@
                                     </excludes>
                                 </filter>
                             </filters>
+                           <finalName>CentralServer</finalName>
                         </configuration>
                     </execution>
                 </executions>
