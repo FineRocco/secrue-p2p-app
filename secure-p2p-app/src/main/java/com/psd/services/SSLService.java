@@ -31,6 +31,7 @@ import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 
 import javax.net.ssl.*;
 import javax.security.auth.x500.X500Principal;
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStream;
@@ -232,17 +233,33 @@ public class SSLService {
      * @return A configured {@link KeyManagerFactory}.
      */
     public static KeyManagerFactory initializeKeyManagerFactory(String username) {
+        String keystorePath = STORE_DIRECTORY + username + "-keystore.jks";
+        File keystoreFile = new File(keystorePath);
+
         try {
+            // Check if the keystore file exists
+            if (!keystoreFile.exists()) {
+                // Create a new keystore if it doesn't exist
+                KeyStore newKeystore = KeyStore.getInstance("JKS");
+                newKeystore.load(null, "centralServer".toCharArray());
+                try (FileOutputStream fos = new FileOutputStream(keystoreFile)) {
+                    newKeystore.store(fos, "centralServer".toCharArray());
+                }
+            }
+
+            // Proceed to load the existing or newly created keystore
             KeyManagerFactory kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
             KeyStore ks = KeyStore.getInstance("JKS");
 
-            try (InputStream keyStoreStream = new FileInputStream(STORE_DIRECTORY + username + "-keystore.jks")) {
+            try (InputStream keyStoreStream = new FileInputStream(keystorePath)) {
                 ks.load(keyStoreStream, "centralServer".toCharArray());
             }
+
             kmf.init(ks, "centralServer".toCharArray());
             return kmf;
         } catch (Exception e) {
             System.out.println("Error initializing Key Manager Factory: " + e.getMessage());
+            e.printStackTrace(); // Helpful for debugging
             return null;
         }
     }
