@@ -11,6 +11,7 @@ This Java-based project implements a secure peer-to-peer (P2P) messaging applica
 - **Peer-to-Peer Architecture**: Eliminates centralized servers, enhancing privacy and reducing vulnerability to external breaches.
 - **Long-Term Cloud Storage Encryption**: Encrypts messages for storage across cloud platforms.
 - **Redundant Cloud Storage**: Ensures reliability with support for three providers: **AWS S3**, **Firebase**, and **Azure**.
+- **Message Searching**: Allow users to search for keywords and find every message in all their conversations where that word was used.
 - **Cross-Platform Compatibility**: Operates on Windows, macOS, and Linux.
 
 ---
