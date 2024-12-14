@@ -1,8 +1,8 @@
 /**
- * The {@code P2PClient} class facilitates secure peer-to-peer (P2P) communication 
- * for a user in a decentralized messaging application. It enables the user to 
- * send their own data to a central server and transmit messages directly to other 
- * users over SSL/TLS. 
+ * The {@code P2PClient} class facilitates secure peer-to-peer (P2P) communication
+ * for a user in a decentralized messaging application. It enables the user to
+ * send their own data to a central server and transmit messages directly to other
+ * users over SSL/TLS.
  *
  * <p>Main functionalities include:
  * <ul>
@@ -10,7 +10,7 @@
  *   <li>Establishing secure connections to other peers for direct messaging</li>
  * </ul>
  *
- * <p>Dependencies: This class relies on {@code EncriptionService} for SSL/TLS configuration 
+ * <p>Dependencies: This class relies on {@code EncriptionService} for SSL/TLS configuration
  * and {@code SerializationService} for serializing and deserializing user data.
  */
 package com.psd;
@@ -18,27 +18,27 @@ package com.psd;
 import com.psd.entities.User;
 import com.psd.services.SSLService;
 import com.psd.services.SerializationService;
-
-import javax.net.ssl.*;
-
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 
-import java.io.*;
+import javax.net.ssl.SSLSocket;
+import javax.net.ssl.SSLSocketFactory;
+import java.io.DataOutputStream;
+import java.io.IOException;
 import java.net.InetAddress;
+import java.security.Security;
 import java.util.ArrayList;
 import java.util.List;
-import java.security.Security;
 
 public class P2PClient {
-
-    private User user;
-    private SSLSocketFactory sslSocketFactory;
-    private SSLSocket clientSocket;
 
     static {
         // Register the Bouncy Castle provider
         Security.addProvider(new BouncyCastleProvider());
     }
+
+    private User user;
+    private SSLSocketFactory sslSocketFactory;
+    private SSLSocket clientSocket;
 
     /**
      * Initializes the {@code P2PClient} by setting up an SSL context and creating 

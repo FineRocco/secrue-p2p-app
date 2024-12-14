@@ -1,7 +1,7 @@
 /**
  * The {@code CentralServer} class serves as the main server in a secure peer-to-peer application.
  * It uses SSL/TLS for secure communication and manages a registry of users, enabling the registration
- * of new users and the retrieval of registered user information. Communication is handled via 
+ * of new users and the retrieval of registered user information. Communication is handled via
  * SSL sockets to maintain privacy and authenticity in the peer-to-peer network.
  *
  * <p>Key functionalities include:
@@ -26,31 +26,27 @@ package com.psd;
 import com.psd.entities.User;
 import com.psd.services.SSLService;
 import com.psd.services.SerializationService;
-import com.psd.storage.AWS3Storage;
-import com.psd.storage.AzureBlobStorage;
-import com.psd.storage.FirebaseStorage;
-
-import javax.net.ssl.*;
-
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 
-import java.io.*;
+import javax.net.ssl.SSLServerSocket;
+import javax.net.ssl.SSLServerSocketFactory;
+import javax.net.ssl.SSLSocket;
+import javax.net.ssl.SSLSocketFactory;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
 import java.net.InetAddress;
+import java.security.Security;
 import java.util.ArrayList;
 import java.util.List;
-import java.security.Security;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class CentralServer {
-    private static final ConcurrentHashMap<String, User> userRegistry = new ConcurrentHashMap<>(); // Stores username and associated user info
     public static final int SERVER_PORT = 8888;
+    private static final ConcurrentHashMap<String, User> userRegistry = new ConcurrentHashMap<>(); // Stores username and associated user info
     private static volatile boolean isRunning = false;
     private static SSLSocketFactory sslSocketFactory;
     private static SSLServerSocketFactory sslServerSocketFactory;
-    private static AWS3Storage aws3Storage = AWS3Storage.getInstance();
-    private static FirebaseStorage firebaseStorage = FirebaseStorage.getInstance();
-    private static AzureBlobStorage azureBlobStorage = AzureBlobStorage.getInstance();
-
 
     static {
         // Register the Bouncy Castle provider
@@ -101,7 +97,6 @@ public class CentralServer {
         userRegistry.put(user.getUserID(), user);
         System.out.println("User registered: " + user.getUserID());
     }
-
 
 
     /**
@@ -162,12 +157,18 @@ public class CentralServer {
 
         @Override
         public void run() {
-            try (DataInputStream dataIn = new DataInputStream(socket.getInputStream());){
+            try (DataInputStream dataIn = new DataInputStream(socket.getInputStream());) {
 
                 int requestType = dataIn.readInt(); // Read request type
 
-                handleUserRequest(dataIn);
+                switch (requestType) {
+                    case 1: // User registration or retrieval
+                        handleUserRequest(dataIn);
+                        break;
 
+                    default:
+                        System.out.println("Unknown request type: " + requestType);
+                }
 
             } catch (IOException e) {
                 System.out.println("Client handler error: " + e.getMessage());
@@ -201,6 +202,6 @@ public class CentralServer {
                 sendUser(users.get(0), getUser(users.get(1).getUserID()));
             }
         }
-    
+
     }
 }

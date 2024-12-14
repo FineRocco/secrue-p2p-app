@@ -1,7 +1,7 @@
 /**
  * The {@code SerializationService} class provides utility methods for serializing
- * and deserializing Java objects to and from byte arrays. This service allows for 
- * the conversion of objects into a byte array form suitable for storage or transmission 
+ * and deserializing Java objects to and from byte arrays. This service allows for
+ * the conversion of objects into a byte array form suitable for storage or transmission
  * over a network and then restores them to their original state.
  *
  * <p>This class includes:
@@ -15,7 +15,7 @@
  *     byte[] data = SerializationService.serialize(myObject);
  *     MyClass restoredObject = (MyClass) SerializationService.deserialize(data);
  * </pre>
- * 
+ *
  * <p>Note: Classes to be serialized must implement {@link java.io.Serializable}.
  */
 package com.psd.services;
@@ -54,7 +54,7 @@ public class SerializationService {
             System.out.println("Deserialization error: data is null or empty");
             return null;
         }
-    
+
         try (ByteArrayInputStream byteIn = new ByteArrayInputStream(data);
              ObjectInputStream in = new ObjectInputStream(byteIn)) {
             return in.readObject();

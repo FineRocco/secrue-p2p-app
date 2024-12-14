@@ -5,9 +5,9 @@ import java.time.Instant;
 import java.util.UUID;
 
 /**
- * The {@code Message} class represents a message exchanged between users in a 
- * peer-to-peer (P2P) network. Each message has unique identifiers for tracking, 
- * details about the sender and receiver, the message content, and a timestamp 
+ * The {@code Message} class represents a message exchanged between users in a
+ * peer-to-peer (P2P) network. Each message has unique identifiers for tracking,
+ * details about the sender and receiver, the message content, and a timestamp
  * indicating when it was created.
  */
 public class Message implements Serializable {
@@ -33,17 +33,16 @@ public class Message implements Serializable {
      * No-argument constructor required for deserialization.
      * Initializes fields with default values.
      */
-    public Message() {  
+    public Message() {
 
     }
 
-     /**
+    /**
      * Factory method to create a new {@code Message} with a specific timestamp.
      *
      * @param sender    The {@link User} sending the message.
      * @param receiver  The {@link User} receiving the message.
      * @param content   The plain-text content of the message.
-     * @param timestamp The {@link Instant} timestamp of when the message was created.
      * @return A new {@code Message} instance with the specified timestamp.
      */
     public static Message createMessage(User sender, User receiver, String content) {

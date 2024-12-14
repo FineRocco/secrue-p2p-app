@@ -7,7 +7,6 @@ import com.psd.services.EncryptionService;
 import com.psd.storage.AWS3Storage;
 import com.psd.storage.AzureBlobStorage;
 import com.psd.storage.FirebaseStorage;
-
 import javafx.application.Application;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
@@ -15,6 +14,7 @@ import javafx.scene.control.*;
 import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
 import javafx.stage.Stage;
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
 
 import java.io.IOException;
 import java.net.InetAddress;
@@ -29,26 +29,25 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.bouncycastle.jce.provider.BouncyCastleProvider;
-
 /**
  * Main class for the Secure P2P Messaging Application.
  * Initializes services and provides a terminal-based interface for interaction.
  */
 public class SecureP2PMessagingApp extends Application {
 
-    User currentUser;
-    P2PServer userServer;
     private static AWS3Storage aws3Storage = AWS3Storage.getInstance();
     private static FirebaseStorage firebaseStorage = FirebaseStorage.getInstance();
     private static AzureBlobStorage azureBlobStorage = AzureBlobStorage.getInstance();
-    public Map<String, Conversation> conversationMap = new HashMap<>();
-    public List<String> conversationsIds = new ArrayList<>();
 
     static {
         // Register the Bouncy Castle provider
         Security.addProvider(new BouncyCastleProvider());
     }
+
+    public Map<String, Conversation> conversationMap = new HashMap<>();
+    public List<String> conversationsIds = new ArrayList<>();
+    User currentUser;
+    P2PServer userServer;
 
     public static void main(String[] args) {
         launch(args);
@@ -145,7 +144,7 @@ public class SecureP2PMessagingApp extends Application {
                 throw new RuntimeException(ex);
             }
         });
-        
+
 
         // Set the button action to prepare a direct message
         sendDirectMessageButton.setOnAction(event -> {
@@ -217,7 +216,7 @@ public class SecureP2PMessagingApp extends Application {
                 System.out.println("Successfully retrieved conversations from AWS S3.");
             } catch (Exception e) {
                 System.err.println("Error retrieving conversations from AWS S3: " + e.getMessage());
-                
+
                 // Attempt to retrieve from Firebase if AWS S3 fails
                 System.out.println("Attempting to retrieve conversations from Firebase instead...");
                 try {
@@ -225,7 +224,7 @@ public class SecureP2PMessagingApp extends Application {
                     System.out.println("Successfully retrieved conversations from Firebase.");
                 } catch (Exception firebaseException) {
                     System.err.println("Error retrieving conversations from Firebase: " + firebaseException.getMessage());
-                    
+
                     // If both AWS S3 and Firebase retrieval fail, attempt Azure Blob Storage
                     System.out.println("Attempting to retrieve conversations from Azure Blob Storage instead...");
                     try {
@@ -245,7 +244,7 @@ public class SecureP2PMessagingApp extends Application {
                     // Decrypt the conversation
                     Conversation conversation = (Conversation) EncryptionService.decryptObject(P2PServer.secretKeyCloud, encryptedConversation);
 
-                    if(!conversationsIds.contains(conversationId)) {
+                    if (!conversationsIds.contains(conversationId)) {
                         conversationsIds.add(conversationId);
                         System.out.println("Successfully decrypted conversation with ID: " + conversationId);
                     }
@@ -287,11 +286,11 @@ public class SecureP2PMessagingApp extends Application {
                     Instant instant = Instant.parse(conversation.getStartTime());
                     // Convert the Instant to ZonedDateTime using the system's default time zone
                     String formattedTimestamp = instant
-                                                    .atZone(ZoneId.systemDefault())
-                                                    .format(formatter);
-                    
+                            .atZone(ZoneId.systemDefault())
+                            .format(formatter);
+
                     String conversationLabel = (i + 1) + ". Conversation with " + participant.getUserID() +
-                                              " (Started on " + formattedTimestamp + ")";                    
+                            " (Started on " + formattedTimestamp + ")";
 
                     conversationComboBox.getItems().add(conversationLabel);
                     conversationMap.put(conversationLabel, conversation);
@@ -326,20 +325,20 @@ public class SecureP2PMessagingApp extends Application {
 
                         for (Message msg : selectedConvo.getMessages()) { // Use getMessages() directly
                             DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
-                            
+
                             // Parse the timestamp string back into an Instant
                             Instant instant = Instant.parse(msg.getTimestamp());
-                            
+
                             // Convert the Instant to ZonedDateTime using the system's default time zone
                             String formattedTimestamp = instant
-                                                            .atZone(ZoneId.systemDefault())
-                                                            .format(formatter);
-                            
+                                    .atZone(ZoneId.systemDefault())
+                                    .format(formatter);
+
                             String senderName = msg.getSender().equals(currentUser) ? "You" : otherParticipant.getUserID();
                             Label messageLabel = new Label(senderName + " [" + formattedTimestamp + "]: " + msg.getContent());
                             chatLogs.getChildren().add(messageLabel);
                         }
-                        
+
                         // Wrap the chatLogs VBox in a ScrollPane
                         ScrollPane scrollPane = new ScrollPane(chatLogs);
                         scrollPane.setFitToWidth(true);
@@ -383,12 +382,12 @@ public class SecureP2PMessagingApp extends Application {
 
                                 // Convert the Instant to ZonedDateTime using the system's default time zone
                                 String formattedTimestamp = instant
-                                                            .atZone(ZoneId.systemDefault())
-                                                            .format(formatter);
-                                
+                                        .atZone(ZoneId.systemDefault())
+                                        .format(formatter);
+
                                 Label messageLabel = new Label(senderName + " [" + formattedTimestamp + "]: " + newMessage.getContent());
                                 chatLogs.getChildren().add(messageLabel); // Update the chat log with the new message
-                                
+
 
                                 // Optionally, scroll to the bottom of the chat log
                                 scrollPane.setVvalue(1.0); // This ensures the scroll pane moves to the latest message
@@ -467,8 +466,8 @@ public class SecureP2PMessagingApp extends Application {
                     // Create a label for each result
                     Label resultLabel = new Label(
                             "Conversation ID: " + conversationId + "\n" +
-                            "Timestamp: " + formattedTimestamp + "\n" +
-                            "Message: " + messageContent
+                                    "Timestamp: " + formattedTimestamp + "\n" +
+                                    "Message: " + messageContent
                     );
 
                     resultLabel.setStyle("-fx-background-color: #ffffff; -fx-border-color: #ccc; -fx-border-width: 1; -fx-padding: 10; -fx-margin: 5;");

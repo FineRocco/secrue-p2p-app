@@ -1,7 +1,7 @@
 package com.psd.entities;
 
 import java.io.Serializable;
-import java.util.*;
+import java.util.Objects;
 
 /**
  * The {@code User} class represents a user in a peer-to-peer (P2P) network.
@@ -12,10 +12,10 @@ import java.util.*;
 public class User implements Serializable {
     private static final long serialVersionUID = 1L;
 
-    private String userID; 
-    private String ipAddress; 
-    private int port; 
-    private List<String> interests; // List of user's interests
+    private String userID;
+    private String ipAddress;
+    private int port;
+
 
     /**
      * No-argument constructor required for deserialization.
@@ -25,7 +25,6 @@ public class User implements Serializable {
         this.userID = null;
         this.ipAddress = null;
         this.port = 0; // Default port value
-        this.interests = new ArrayList<>();
     }
 
     /**
@@ -40,7 +39,6 @@ public class User implements Serializable {
         this.userID = userName;
         this.ipAddress = ipAddress;
         this.port = port;
-        this.interests = new ArrayList<>(); // Initialize with an empty list
     }
 
     // Getters and setters for group keys and interests
@@ -57,17 +55,6 @@ public class User implements Serializable {
         return port;
     }
 
-    public List<String> getInterests() {
-        return new ArrayList<>(interests); // Return a copy to preserve immutability
-    }
-
-    public void setInterests(List<String> interests) {
-        this.interests = new ArrayList<>(interests); // Set with a copy to preserve immutability
-    }
-
-    public void addInterest(String interest) {
-        this.interests.add(interest);
-    }
 
     @Override
     public boolean equals(Object obj) {
@@ -88,7 +75,6 @@ public class User implements Serializable {
                 "userID='" + userID + '\'' +
                 ", ipAddress='" + ipAddress + '\'' +
                 ", port=" + port +
-                ", interests=" + interests +
                 '}';
     }
 }

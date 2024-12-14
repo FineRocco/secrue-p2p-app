@@ -5,11 +5,7 @@ import com.amazonaws.auth.BasicAWSCredentials;
 import com.amazonaws.regions.Regions;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
-import com.amazonaws.services.s3.model.ListObjectsV2Request;
-import com.amazonaws.services.s3.model.ListObjectsV2Result;
-import com.amazonaws.services.s3.model.ObjectMetadata;
-import com.amazonaws.services.s3.model.S3Object;
-import com.amazonaws.services.s3.model.S3ObjectSummary;
+import com.amazonaws.services.s3.model.*;
 import com.psd.entities.User;
 
 import java.io.ByteArrayInputStream;
@@ -72,8 +68,8 @@ public class AWS3Storage {
     /**
      * Saves a share of the key into the user's bucket.
      *
-     * @param userId The ID of the user whose bucket the share will be saved into.
-     * @param shareId The unique identifier for the share.
+     * @param userId    The ID of the user whose bucket the share will be saved into.
+     * @param shareId   The unique identifier for the share.
      * @param shareData The share data as a Base64-encoded string.
      */
     public void saveKeyShare(String userId, String shareId, BigInteger shareData) {
@@ -100,7 +96,7 @@ public class AWS3Storage {
     /**
      * Checks if a share exists in the specified user's bucket.
      *
-     * @param userId The ID of the user whose bucket will be checked.
+     * @param userId  The ID of the user whose bucket will be checked.
      * @param shareId The unique identifier for the share.
      * @return {@code true} if the share exists, {@code false} otherwise.
      */
@@ -122,7 +118,7 @@ public class AWS3Storage {
     /**
      * Loads a share of the key from the specified user's bucket.
      *
-     * @param userId The ID of the user whose bucket the share will be loaded from.
+     * @param userId  The ID of the user whose bucket the share will be loaded from.
      * @param shareId The unique identifier for the share.
      * @return The share data as a Base64-encoded string, or {@code null} if the share does not exist.
      * @throws IOException If an error occurs during the loading process.
@@ -202,13 +198,13 @@ public class AWS3Storage {
         try {
             String bucketName = "psd-" + userId.toLowerCase();
             String wordKey = "dictionaries/" + encryptedWord;
-    
+
             byte[] metadataBytes = encryptedMetadata.getBytes();
             InputStream metadataStream = new ByteArrayInputStream(metadataBytes);
             ObjectMetadata metadata = new ObjectMetadata();
             metadata.setContentLength(metadataBytes.length);
             metadata.setContentType("text/plain");
-    
+
             s3Client.putObject(bucketName, wordKey, metadataStream, metadata);
             System.out.println("Saved word to AWS S3 dictionary for user: " + userId);
         } catch (Exception e) {
@@ -302,7 +298,7 @@ public class AWS3Storage {
 
         S3Object s3Object = s3Client.getObject(bucketName, conversationKey);
         try (InputStream inputStream = s3Object.getObjectContent();
-            ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+             ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
 
             byte[] buffer = new byte[1024];
             int length;
@@ -321,15 +317,15 @@ public class AWS3Storage {
     public Map<String, String> listAllEncryptedConversations(User user) {
         Map<String, String> encryptedConversations = new HashMap<>();
         String bucketName = "psd-" + user.getUserID().toLowerCase();
-    
+
         ListObjectsV2Request req = new ListObjectsV2Request().withBucketName(bucketName);
         ListObjectsV2Result result;
-    
+
         do {
             result = s3Client.listObjectsV2(req);
             for (S3ObjectSummary objectSummary : result.getObjectSummaries()) {
                 String conversationId = objectSummary.getKey();
-    
+
                 // Skip objects in the "shares" folder
                 if (conversationId.startsWith("shares/")) {
                     continue;
@@ -337,7 +333,7 @@ public class AWS3Storage {
                 if (conversationId.startsWith("dictionaries/")) {
                     continue;
                 }
-    
+
                 try {
                     // Retrieve the object content (encrypted data)
                     S3Object s3Object = s3Client.getObject(bucketName, conversationId);
@@ -358,9 +354,9 @@ public class AWS3Storage {
             }
             req.setContinuationToken(result.getNextContinuationToken());
         } while (result.isTruncated());
-    
+
         return encryptedConversations;
-    }    
+    }
 
     public void deleteEncryptedConversation(String conversationKey, String userId) {
         String bucketName = "psd-" + userId.toLowerCase();

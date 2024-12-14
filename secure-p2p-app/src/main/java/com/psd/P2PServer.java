@@ -1,6 +1,6 @@
 /**
  * The {@code P2PServer} class represents a peer-to-peer (P2P) server in a secure messaging
- * application. It enables secure communication between users, managing conversations and 
+ * application. It enables secure communication between users, managing conversations and
  * handling incoming messages from peers. Each user has an instance of {@code P2PServer} that
  * listens on a designated port for incoming connections, allowing direct peer-to-peer messaging.
  *
@@ -12,14 +12,17 @@
  *   <li>Maintaining active conversations between users</li>
  * </ul>
  *
- * <p>Dependencies: This class relies on {@code EncriptionService} for SSL/TLS setup and 
- * {@code SerializationService} for data serialization. It also updates the JavaFX UI to display 
+ * <p>Dependencies: This class relies on {@code EncriptionService} for SSL/TLS setup and
+ * {@code SerializationService} for data serialization. It also updates the JavaFX UI to display
  * incoming messages.
  */
 package com.psd;
 
 import com.amazonaws.client.ClientHandler;
-import com.psd.entities.*;
+import com.psd.entities.Conversation;
+import com.psd.entities.Message;
+import com.psd.entities.Share;
+import com.psd.entities.User;
 import com.psd.services.EncryptionService;
 import com.psd.services.SSLService;
 import com.psd.services.SecretSharingService;
@@ -27,20 +30,19 @@ import com.psd.services.SerializationService;
 import com.psd.storage.AWS3Storage;
 import com.psd.storage.AzureBlobStorage;
 import com.psd.storage.FirebaseStorage;
-
 import javafx.application.Platform;
 import javafx.scene.control.Label;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.StackPane;
-
-import javax.net.ssl.*;
-
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 
-import java.io.*;
+import javax.net.ssl.SSLServerSocket;
+import javax.net.ssl.SSLServerSocketFactory;
+import javax.net.ssl.SSLSocket;
+import java.io.DataInputStream;
+import java.io.IOException;
 import java.math.BigInteger;
 import java.net.InetAddress;
-import java.security.GeneralSecurityException;
 import java.security.Security;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -54,23 +56,24 @@ import java.util.Map;
 public class P2PServer {
 
     private static final Object userAuxLock = new Object();
+    public static BigInteger secretKeyCloud; // The secret key
     private static User userAux;
+    private static AWS3Storage aws3Storage = AWS3Storage.getInstance();
+    private static FirebaseStorage firebaseStorage = FirebaseStorage.getInstance();
+    private static AzureBlobStorage azureBlobStorage = AzureBlobStorage.getInstance();
+
+    static {
+        // Register the Bouncy Castle provider
+        Security.addProvider(new BouncyCastleProvider());
+    }
+
     private final User user;
     private final int port; // The port on which the server listens
-    public static BigInteger secretKeyCloud; // The secret key
     private SSLServerSocket serverSocket;
     private volatile boolean running = true; // Will be modified by different threads
     private BorderPane mainMenuLayout; // Reference to the main layout in the JavaFX UI
     private P2PClient client;
     private SSLServerSocketFactory sslServerSocketFactory;
-    private static AWS3Storage aws3Storage = AWS3Storage.getInstance();
-    private static FirebaseStorage firebaseStorage = FirebaseStorage.getInstance();
-    private static AzureBlobStorage azureBlobStorage = AzureBlobStorage.getInstance();
-        
-    static {
-        // Register the Bouncy Castle provider
-        Security.addProvider(new BouncyCastleProvider());
-    }
 
     /**
      * Constructs a {@code P2PServer} for a specified user, with a reference to the JavaFX main menu layout.
@@ -95,6 +98,155 @@ public class P2PServer {
         new Thread(this::start).start(); // Start server on a new thread
     }
 
+    public static void saveConversationClouds(String conversationId, String encryptedConversation, String userId) {
+        // Save updated conversation to both AWS S3, Firebase and AzureBlob
+        try {
+            System.out.println("Saving conversation to AWS S3.");
+            aws3Storage.saveEncryptedConversation(conversationId, encryptedConversation, userId);
+            System.out.println("Saved conversation to Firebase.");
+            firebaseStorage.saveEncryptedConversation(conversationId, encryptedConversation, userId);
+            System.out.println("Saved conversation to Azure Blob.");
+            azureBlobStorage.saveEncryptedConversation(conversationId, encryptedConversation, userId);
+        } catch (IOException e) {
+            System.err.println("Error saving conversation to cloud: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    public static String loadConversationClouds(String conversationId, String userId) {
+        try {
+            // Attempt to load the conversation from AWS S3
+            String conversation = aws3Storage.loadEncryptedConversation(conversationId, userId);
+
+            // If the conversation is not found in AWS S3, try loading it from Firebase
+            if (conversation == null) {
+                conversation = firebaseStorage.loadEncryptedConversation(conversationId, userId);
+                System.out.println("Loaded conversation from Firebase.");
+            }
+
+            // If the conversation is not found in firebase, try loading it from AzureBlob
+            if (conversation == null) {
+                conversation = azureBlobStorage.loadEncryptedConversation(conversationId, userId);
+                System.out.println("Loaded conversation from AzureBlob.");
+            }
+            return conversation;
+
+        } catch (IOException e) {
+            System.err.println("Error loading conversation from cloud: " + e.getMessage());
+            e.printStackTrace();
+            return null;
+        }
+    }
+
+    /**
+     * Saves a word to the user's dictionary in the cloud with associated metadata.
+     *
+     * @param userId         The ID of the user whose dictionary the word will be saved to.
+     * @param word           The word to save.
+     * @param messageContent The content of the message containing the word.
+     * @param conversationId The ID of the conversation where the word was used.
+     * @param timestamp      The timestamp when the word was sent.
+     */
+    public static void saveWordToDictionary(String userId, String word, String messageContent, String conversationId, String timestamp) {
+        try {
+            // Create a dictionary entry
+            Map<String, List<String>> wordMetadata = new HashMap<>();
+            wordMetadata.computeIfAbsent("messageContent", k -> new ArrayList<>()).add(messageContent);
+            wordMetadata.computeIfAbsent("conversationId", k -> new ArrayList<>()).add(conversationId);
+            wordMetadata.computeIfAbsent("timestamp", k -> new ArrayList<>()).add(timestamp);
+
+            saveDicToCloud(userId.toLowerCase(), word, wordMetadata);
+        } catch (Exception e) {
+            System.err.println("Error saving word to dictionary for user " + userId + ": " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * Saves a word and its metadata to the dictionaries folder across all 3 clouds (AWS S3, Firebase, Azure).
+     *
+     * @param userId       The ID of the user whose dictionaries are being updated.
+     * @param word         The word to save.
+     * @param wordMetadata The metadata associated with the word.
+     */
+    public static void saveDicToCloud(String userId, String word, Map<String, List<String>> wordMetadata) {
+        try {
+            // Encrypt the word and metadata
+            String encryptedWord = EncryptionService.encryptObject(secretKeyCloud, word);
+            String encryptedMetadata = EncryptionService.encryptObject(secretKeyCloud, wordMetadata);
+
+            // Check if dictionaries folder exists in all clouds
+            boolean awsDicExists = aws3Storage.checkDicExists(userId);
+            boolean firebaseDicExists = firebaseStorage.checkDicExists(userId);
+            boolean azureDicExists = azureBlobStorage.checkDicExists(userId);
+
+            // Create dictionaries folder if it doesn't exist
+            if (!awsDicExists) {
+                aws3Storage.createDictionariesFolder(userId);
+            }
+            if (!firebaseDicExists) {
+                firebaseStorage.createDictionariesFolder(userId);
+            }
+            if (!azureDicExists) {
+                azureBlobStorage.createDictionariesFolder(userId);
+            }
+
+            // Check if the word already exists in AWS S3
+            if (aws3Storage.checkWordExistsInDic(userId, encryptedWord)) {
+                // If the word exists, update its metadata
+                String existingMetadata = aws3Storage.loadWordMetadata(userId, encryptedWord);
+                // Decrypt the metadata to its original form
+                Map<String, List<String>> metadata = (Map<String, List<String>>) EncryptionService.decryptObject(secretKeyCloud, existingMetadata);
+                mergeMetadata(metadata, wordMetadata);
+                String updatedMetadata = EncryptionService.encryptObject(secretKeyCloud, metadata);
+                aws3Storage.saveWordToDic(userId, encryptedWord, updatedMetadata);
+            } else {
+                // Save new word and metadata if it doesn't exist
+                aws3Storage.saveWordToDic(userId, encryptedWord, encryptedMetadata);
+            }
+
+            // Repeat the process for Firebase
+            if (firebaseStorage.checkWordExistsInDic(userId, encryptedWord)) {
+                String existingMetadata = firebaseStorage.loadWordMetadata(userId, encryptedWord);
+                // Decrypt the metadata to its original form
+                Map<String, List<String>> metadata = (Map<String, List<String>>) EncryptionService.decryptObject(secretKeyCloud, existingMetadata);
+                mergeMetadata(metadata, wordMetadata);
+                String updatedMetadata = EncryptionService.encryptObject(secretKeyCloud, metadata);
+                firebaseStorage.saveWordToDic(userId, encryptedWord, updatedMetadata);
+            } else {
+                firebaseStorage.saveWordToDic(userId, encryptedWord, encryptedMetadata);
+            }
+
+            // Repeat the process for Azure
+            if (azureBlobStorage.checkWordExistsInDic(userId, encryptedWord)) {
+                String existingMetadata = azureBlobStorage.loadWordMetadata(userId, encryptedWord);
+                // Decrypt the metadata to its original form
+                Map<String, List<String>> metadata = (Map<String, List<String>>) EncryptionService.decryptObject(secretKeyCloud, existingMetadata);
+                mergeMetadata(metadata, wordMetadata);
+                String updatedMetadata = EncryptionService.encryptObject(secretKeyCloud, metadata);
+                azureBlobStorage.saveWordToDic(userId, encryptedWord, updatedMetadata);
+            } else {
+                azureBlobStorage.saveWordToDic(userId, encryptedWord, encryptedMetadata);
+            }
+
+            System.out.println("Successfully saved or updated word and metadata in dictionaries across all clouds.");
+        } catch (Exception e) {
+            System.err.println("Error saving or updating word and metadata in dictionaries: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * Merges new metadata into existing metadata without overwriting.
+     *
+     * @param existingMetadata The existing metadata map.
+     * @param newMetadata      The new metadata to add.
+     */
+    private static void mergeMetadata(Map<String, List<String>> existingMetadata, Map<String, List<String>> newMetadata) {
+        for (Map.Entry<String, List<String>> entry : newMetadata.entrySet()) {
+            existingMetadata.computeIfAbsent(entry.getKey(), k -> new ArrayList<>()).addAll(entry.getValue());
+        }
+    }
 
     /**
      * Starts the P2P server, initializing SSL settings and listening for incoming connections and sharing the secret between clouds
@@ -123,46 +275,6 @@ public class P2PServer {
         }
     }
 
-    public static void saveConversationClouds(String conversationId, String encryptedConversation, String userId){
-        // Save updated conversation to both AWS S3, Firebase and AzureBlob
-        try {
-            System.out.println("Saving conversation to AWS S3.");
-            aws3Storage.saveEncryptedConversation(conversationId, encryptedConversation, userId);
-            System.out.println("Saved conversation to Firebase.");
-            firebaseStorage.saveEncryptedConversation(conversationId, encryptedConversation, userId);
-            System.out.println("Saved conversation to Azure Blob.");
-            azureBlobStorage.saveEncryptedConversation(conversationId, encryptedConversation, userId);
-        } catch (IOException e) {
-            System.err.println("Error saving conversation to cloud: " + e.getMessage());
-            e.printStackTrace();
-        }
-    }
-
-    public static String loadConversationClouds(String conversationId, String userId){
-        try {
-            // Attempt to load the conversation from AWS S3
-            String conversation = aws3Storage.loadEncryptedConversation(conversationId, userId);
-
-            // If the conversation is not found in AWS S3, try loading it from Firebase
-            if (conversation == null) {
-                conversation = firebaseStorage.loadEncryptedConversation(conversationId, userId);
-                System.out.println("Loaded conversation from Firebase.");
-            }
-
-            // If the conversation is not found in firebase, try loading it from AzureBlob
-            if (conversation == null) {
-                conversation = azureBlobStorage.loadEncryptedConversation(conversationId, userId);
-                System.out.println("Loaded conversation from AzureBlob.");
-            }
-            return conversation;
-
-        } catch (IOException e) {
-            System.err.println("Error loading conversation from cloud: " + e.getMessage());
-            e.printStackTrace();
-            return null;
-        }
-    }
-
     /**
      * Ensures that key shares exist in the clouds. If not, generates and distributes shares.
      *
@@ -183,7 +295,7 @@ public class P2PServer {
                 BigInteger share3 = azureBlobStorage.loadKeyShare(userId, "share3");
 
                 // Combine the retrieved shares into a map
-                Share[] retrievedShares = new Share[] {
+                Share[] retrievedShares = new Share[]{
                         new Share(BigInteger.valueOf(1), share1),
                         new Share(BigInteger.valueOf(2), share2),
                         new Share(BigInteger.valueOf(3), share3)
@@ -192,8 +304,7 @@ public class P2PServer {
                 // Reconstruct the key
                 this.secretKeyCloud = SecretSharingService.combine(retrievedShares);
                 System.out.println("Reconstructed Secret Key: " + this.secretKeyCloud);
-            }
-            else {
+            } else {
                 // Generate and split a new key if shares are missing
                 System.out.println("Generating new key and shares...");
                 this.secretKeyCloud = SecretSharingService.generateKey();
@@ -347,116 +458,6 @@ public class P2PServer {
     }
 
     /**
-     * Saves a word to the user's dictionary in the cloud with associated metadata.
-     *
-     * @param userId         The ID of the user whose dictionary the word will be saved to.
-     * @param word           The word to save.
-     * @param messageContent The content of the message containing the word.
-     * @param conversationId The ID of the conversation where the word was used.
-     * @param timestamp      The timestamp when the word was sent.
-     */
-    public static void saveWordToDictionary(String userId, String word, String messageContent, String conversationId, String timestamp) {
-        try {
-            // Create a dictionary entry
-            Map<String, List<String>> wordMetadata = new HashMap<>();
-            wordMetadata.computeIfAbsent("messageContent", k -> new ArrayList<>()).add(messageContent);
-            wordMetadata.computeIfAbsent("conversationId", k -> new ArrayList<>()).add(conversationId);
-            wordMetadata.computeIfAbsent("timestamp", k -> new ArrayList<>()).add(timestamp);
-
-            saveDicToCloud(userId.toLowerCase(), word, wordMetadata);
-        } catch (Exception e) {
-            System.err.println("Error saving word to dictionary for user " + userId + ": " + e.getMessage());
-            e.printStackTrace();
-        }
-    }
-
-    /**
-     * Saves a word and its metadata to the dictionaries folder across all 3 clouds (AWS S3, Firebase, Azure).
-     *
-     * @param userId       The ID of the user whose dictionaries are being updated.
-     * @param word         The word to save.
-     * @param wordMetadata The metadata associated with the word.
-     */
-    public static void saveDicToCloud(String userId, String word, Map<String, List<String>> wordMetadata) {
-        try {
-            // Encrypt the word and metadata
-            String encryptedWord = EncryptionService.encryptObject(secretKeyCloud, word);
-            String encryptedMetadata = EncryptionService.encryptObject(secretKeyCloud, wordMetadata);
-
-            // Check if dictionaries folder exists in all clouds
-            boolean awsDicExists = aws3Storage.checkDicExists(userId);
-            boolean firebaseDicExists = firebaseStorage.checkDicExists(userId);
-            boolean azureDicExists = azureBlobStorage.checkDicExists(userId);
-
-            // Create dictionaries folder if it doesn't exist
-            if (!awsDicExists) {
-                aws3Storage.createDictionariesFolder(userId);
-            }
-            if (!firebaseDicExists) {
-                firebaseStorage.createDictionariesFolder(userId);
-            }
-            if (!azureDicExists) {
-                azureBlobStorage.createDictionariesFolder(userId);
-            }
-
-            // Check if the word already exists in AWS S3
-            if (aws3Storage.checkWordExistsInDic(userId, encryptedWord)) {
-                // If the word exists, update its metadata
-                String existingMetadata = aws3Storage.loadWordMetadata(userId, encryptedWord);
-                // Decrypt the metadata to its original form
-                Map<String, List<String>> metadata = (Map<String, List<String>>) EncryptionService.decryptObject(secretKeyCloud, existingMetadata);
-                mergeMetadata(metadata, wordMetadata);
-                String updatedMetadata = EncryptionService.encryptObject(secretKeyCloud, metadata);
-                aws3Storage.saveWordToDic(userId, encryptedWord, updatedMetadata);
-            } else {
-                // Save new word and metadata if it doesn't exist
-                aws3Storage.saveWordToDic(userId, encryptedWord, encryptedMetadata);
-            }
-
-            // Repeat the process for Firebase
-            if (firebaseStorage.checkWordExistsInDic(userId, encryptedWord)) {
-                String existingMetadata = firebaseStorage.loadWordMetadata(userId, encryptedWord);
-                // Decrypt the metadata to its original form
-                Map<String, List<String>> metadata = (Map<String, List<String>>) EncryptionService.decryptObject(secretKeyCloud, existingMetadata);
-                mergeMetadata(metadata, wordMetadata);
-                String updatedMetadata = EncryptionService.encryptObject(secretKeyCloud, metadata);
-                firebaseStorage.saveWordToDic(userId, encryptedWord, updatedMetadata);
-            } else {
-                firebaseStorage.saveWordToDic(userId, encryptedWord, encryptedMetadata);
-            }
-
-            // Repeat the process for Azure
-            if (azureBlobStorage.checkWordExistsInDic(userId, encryptedWord)) {
-                String existingMetadata = azureBlobStorage.loadWordMetadata(userId, encryptedWord);
-                // Decrypt the metadata to its original form
-                Map<String, List<String>> metadata = (Map<String, List<String>>) EncryptionService.decryptObject(secretKeyCloud, existingMetadata);
-                mergeMetadata(metadata, wordMetadata);
-                String updatedMetadata = EncryptionService.encryptObject(secretKeyCloud, metadata);
-                azureBlobStorage.saveWordToDic(userId, encryptedWord, updatedMetadata);
-            } else {
-                azureBlobStorage.saveWordToDic(userId, encryptedWord, encryptedMetadata);
-            }
-
-            System.out.println("Successfully saved or updated word and metadata in dictionaries across all clouds.");
-        } catch (Exception e) {
-            System.err.println("Error saving or updating word and metadata in dictionaries: " + e.getMessage());
-            e.printStackTrace();
-        }
-    }
-
-    /**
-     * Merges new metadata into existing metadata without overwriting.
-     *
-     * @param existingMetadata The existing metadata map.
-     * @param newMetadata      The new metadata to add.
-     */
-    private static void mergeMetadata(Map<String, List<String>> existingMetadata, Map<String, List<String>> newMetadata) {
-        for (Map.Entry<String, List<String>> entry : newMetadata.entrySet()) {
-            existingMetadata.computeIfAbsent(entry.getKey(), k -> new ArrayList<>()).addAll(entry.getValue());
-        }
-    }
-
-    /**
      * Searches for messages containing a specific word across clouds for the current user.
      * Tries AWS S3 first, then Firebase, and finally Azure Blob Storage if the previous fails.
      *
@@ -545,7 +546,7 @@ public class P2PServer {
         }
     }
 
-    public void sendInterestsToCentralServer(User user){
+    public void sendInterestsToCentralServer(User user) {
         client.sendInterestsToCentralServer(SerializationService.serialize(user));
     }
 
@@ -637,31 +638,29 @@ public class P2PServer {
 
                         // Save updated conversation to both AWS S3, Firebase and AzureBlob
                         saveConversationClouds(conversationId, newEncryptedConversation, receiver.getUserID());
-                    }
-                    catch (Exception e) {
+                    } catch (Exception e) {
                         // Handle exceptions (e.g., logging, retries, etc.)
                         System.err.println("Error processing conversation from cloud: " + e.getMessage());
                     }
 
                 } else {
 
-                        try {
-                            // Decrypt the conversation using the shared secret key
-                            Conversation conversationInCloud = (Conversation) EncryptionService.decryptObject(secretKeyCloud, encryptedConversation);
+                    try {
+                        // Decrypt the conversation using the shared secret key
+                        Conversation conversationInCloud = (Conversation) EncryptionService.decryptObject(secretKeyCloud, encryptedConversation);
 
-                            // Add message to conversation
-                            conversationInCloud.addMessage(message);
+                        // Add message to conversation
+                        conversationInCloud.addMessage(message);
 
-                            // Encrypt the conversation using the shared secret key
-                            String newEncryptedConversation = EncryptionService.encryptObject(secretKeyCloud, conversationInCloud);
+                        // Encrypt the conversation using the shared secret key
+                        String newEncryptedConversation = EncryptionService.encryptObject(secretKeyCloud, conversationInCloud);
 
-                            // Save updated conversation to AWS S3, Firebase, and AzureBlob
-                            saveConversationClouds(conversationId, newEncryptedConversation, receiver.getUserID());
-                        }
-                        catch (Exception e) {
-                            // Handle exceptions (e.g., logging, retries, etc.)
-                            System.err.println("Error processing conversation from cloud: " + e.getMessage());
-                        }
+                        // Save updated conversation to AWS S3, Firebase, and AzureBlob
+                        saveConversationClouds(conversationId, newEncryptedConversation, receiver.getUserID());
+                    } catch (Exception e) {
+                        // Handle exceptions (e.g., logging, retries, etc.)
+                        System.err.println("Error processing conversation from cloud: " + e.getMessage());
+                    }
                 }
 
                 // Split the message content into words and save them in the user's dictionary
@@ -677,13 +676,13 @@ public class P2PServer {
                     System.err.println("Error saving words to dictionaries: " + e.getMessage());
                     e.printStackTrace();
                 }
-                }).start();
+            }).start();
 
-                // Update the UI to display the received message
-                Platform.runLater(() -> {
-                    Label messageLabel = new Label("Received message from: " + message.getSender().getUserID());
-                    mainMenuLayout.setCenter(new StackPane(messageLabel)); // Display message in UI
-                });
+            // Update the UI to display the received message
+            Platform.runLater(() -> {
+                Label messageLabel = new Label("Received message from: " + message.getSender().getUserID());
+                mainMenuLayout.setCenter(new StackPane(messageLabel)); // Display message in UI
+            });
 
         }
     }

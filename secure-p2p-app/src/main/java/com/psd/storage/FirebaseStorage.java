@@ -1,15 +1,10 @@
 package com.psd.storage;
 
 import com.google.auth.oauth2.GoogleCredentials;
+import com.google.cloud.firestore.*;
 import com.google.firebase.FirebaseApp;
 import com.google.firebase.FirebaseOptions;
-import com.google.cloud.firestore.Firestore;
 import com.google.firebase.cloud.FirestoreClient;
-import com.google.cloud.firestore.CollectionReference;
-import com.google.cloud.firestore.DocumentReference;
-import com.google.cloud.firestore.DocumentSnapshot;
-import com.google.cloud.firestore.QueryDocumentSnapshot;
-import com.google.cloud.firestore.QuerySnapshot;
 import com.psd.entities.User;
 
 import java.io.FileInputStream;
@@ -27,7 +22,6 @@ public class FirebaseStorage {
 
     /**
      * Constructor to initialize Firebase Firestore client.
-     *
      */
     public FirebaseStorage() {
         try {
@@ -86,8 +80,8 @@ public class FirebaseStorage {
     /**
      * Saves a share of the key into the user's Firestore collection.
      *
-     * @param userId   The ID of the user whose collection the share will be saved into.
-     * @param shareId  The unique identifier for the share.
+     * @param userId    The ID of the user whose collection the share will be saved into.
+     * @param shareId   The unique identifier for the share.
      * @param shareData The share data as a Base64-encoded string.
      */
     public void saveKeyShare(String userId, String shareId, BigInteger shareData) {
@@ -122,7 +116,7 @@ public class FirebaseStorage {
             // Retrieve the share data
             DocumentSnapshot document = docRef.get().get();
             if (document.exists()) {
-                return new BigInteger(document.getString("data")) ;
+                return new BigInteger(document.getString("data"));
             } else {
                 System.out.println("Share not found: " + shareId + " for user: " + userId);
                 return null;
@@ -204,8 +198,8 @@ public class FirebaseStorage {
     /**
      * Saves an encrypted word and its metadata directly into the `dictionary` subcollection in Firestore.
      *
-     * @param userId           The ID of the user whose `dictionary` subcollection will be updated.
-     * @param encryptedWord    The encrypted word to save (used as the document ID).
+     * @param userId            The ID of the user whose `dictionary` subcollection will be updated.
+     * @param encryptedWord     The encrypted word to save (used as the document ID).
      * @param encryptedMetadata The encrypted metadata associated with the word.
      */
     public void saveWordToDic(String userId, String encryptedWord, String encryptedMetadata) {
@@ -241,9 +235,9 @@ public class FirebaseStorage {
 
             // Reference to the document for the word in the dictionary subcollection
             DocumentReference wordRef = db.collection(userCollectionName)
-                                        .document("dictionaries")
-                                        .collection("dictionary")
-                                        .document(encryptedWord);
+                    .document("dictionaries")
+                    .collection("dictionary")
+                    .document(encryptedWord);
 
             // Check if the document exists
             boolean exists = wordRef.get().get().exists();
@@ -268,9 +262,9 @@ public class FirebaseStorage {
 
             // Reference to the dictionary subcollection
             DocumentReference wordDocRef = db.collection(userCollectionName)
-                                            .document("dictionaries")
-                                            .collection("dictionary")
-                                            .document(encryptedWord);
+                    .document("dictionaries")
+                    .collection("dictionary")
+                    .document(encryptedWord);
 
             // Fetch the document
             DocumentSnapshot document = wordDocRef.get().get();
@@ -293,9 +287,9 @@ public class FirebaseStorage {
     /**
      * Saves an encrypted conversation to a user-specific Firestore collection.
      *
-     * @param conversationKey The unique key for the conversation.
+     * @param conversationKey       The unique key for the conversation.
      * @param encryptedConversation The encrypted conversation string to save.
-     * @param userId The ID of the user for whom the conversation is being saved.
+     * @param userId                The ID of the user for whom the conversation is being saved.
      * @throws IOException If an error occurs during saving.
      */
     public void saveEncryptedConversation(String conversationKey, String encryptedConversation, String userId) throws IOException {
@@ -316,7 +310,7 @@ public class FirebaseStorage {
      * Loads an encrypted conversation from a user-specific Firestore collection.
      *
      * @param conversationKey The unique key for the conversation.
-     * @param userId The ID of the user for whom the conversation is being loaded.
+     * @param userId          The ID of the user for whom the conversation is being loaded.
      * @return The encrypted conversation as a string, or null if not found.
      * @throws IOException If an error occurs during loading.
      */
@@ -380,7 +374,7 @@ public class FirebaseStorage {
      * Deletes an encrypted conversation from a user-specific Firestore collection.
      *
      * @param conversationKey The unique key for the conversation.
-     * @param userId The ID of the user for whom the conversation is being deleted.
+     * @param userId          The ID of the user for whom the conversation is being deleted.
      */
     public void deleteEncryptedConversation(String conversationKey, String userId) {
         String collectionName = "user_" + userId;

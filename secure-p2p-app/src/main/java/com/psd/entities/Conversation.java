@@ -7,9 +7,9 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * The {@code Conversation} class represents a conversation between two users 
- * in a peer-to-peer messaging application. It maintains a list of messages 
- * exchanged between the two users, as well as details about the participants and 
+ * The {@code Conversation} class represents a conversation between two users
+ * in a peer-to-peer messaging application. It maintains a list of messages
+ * exchanged between the two users, as well as details about the participants and
  * the start time of the conversation.
  */
 public class Conversation implements Serializable {
@@ -25,7 +25,7 @@ public class Conversation implements Serializable {
      * No-argument constructor required for deserialization.
      * Initializes fields with default values.
      */
-    
+
     public Conversation(User participant1, User participant2) {
         String conversationId = (participant1.getUserID().compareTo(participant2.getUserID()) < 0)
                 ? participant1.getUserID() + "-" + participant2.getUserID()
@@ -36,41 +36,6 @@ public class Conversation implements Serializable {
         this.participant2 = participant2;
         this.messages = new ArrayList<>();
         this.startTime = Instant.now().toString(); // Set the current time as ISO-8601 string
-    }    
-
-    /**
-     * Handles deserialization of the `messages` field.
-     * Ensures that `messages` is always stored as a `List<Message>`.
-     *
-     * @param messagesData The deserialized messages value, which could be a Map or a List.
-     */
-    @SuppressWarnings("unchecked")
-    public void setMessages(Object messagesData) {
-        if (messagesData instanceof List) {
-            this.messages = (List<Message>) messagesData;
-        } else if (messagesData instanceof Map) {
-            this.messages = new ArrayList<>(((Map<String, Message>) messagesData).values());
-        } else {
-            System.err.println("Unsupported type for messages: " + messagesData.getClass());
-            this.messages = new ArrayList<>(); // Default to empty list in case of errors
-        }
-    }
-
-    /**
-     * Handles deserialization of the `startTime` field.
-     * Ensures that `startTime` is always stored as a `String`.
-     *
-     * @param startTime The deserialized startTime value, which could be a String or other type.
-     */
-    public void setStartTime(Object startTime) {
-        if (startTime instanceof String) {
-            this.startTime = (String) startTime;
-        } else if (startTime instanceof Instant) {
-            this.startTime = ((Instant) startTime).toString();
-        } else {
-            System.err.println("Unsupported type for startTime: " + startTime.getClass());
-            this.startTime = Instant.now().toString(); // Default to current time in case of errors
-        }
     }
 
     /**
@@ -91,6 +56,24 @@ public class Conversation implements Serializable {
      */
     public List<Message> getMessages() {
         return messages;
+    }
+
+    /**
+     * Handles deserialization of the `messages` field.
+     * Ensures that `messages` is always stored as a `List<Message>`.
+     *
+     * @param messagesData The deserialized messages value, which could be a Map or a List.
+     */
+    @SuppressWarnings("unchecked")
+    public void setMessages(Object messagesData) {
+        if (messagesData instanceof List) {
+            this.messages = (List<Message>) messagesData;
+        } else if (messagesData instanceof Map) {
+            this.messages = new ArrayList<>(((Map<String, Message>) messagesData).values());
+        } else {
+            System.err.println("Unsupported type for messages: " + messagesData.getClass());
+            this.messages = new ArrayList<>(); // Default to empty list in case of errors
+        }
     }
 
     /**
@@ -149,5 +132,22 @@ public class Conversation implements Serializable {
      */
     public String getStartTime() {
         return startTime;
+    }
+
+    /**
+     * Handles deserialization of the `startTime` field.
+     * Ensures that `startTime` is always stored as a `String`.
+     *
+     * @param startTime The deserialized startTime value, which could be a String or other type.
+     */
+    public void setStartTime(Object startTime) {
+        if (startTime instanceof String) {
+            this.startTime = (String) startTime;
+        } else if (startTime instanceof Instant) {
+            this.startTime = ((Instant) startTime).toString();
+        } else {
+            System.err.println("Unsupported type for startTime: " + startTime.getClass());
+            this.startTime = Instant.now().toString(); // Default to current time in case of errors
+        }
     }
 }

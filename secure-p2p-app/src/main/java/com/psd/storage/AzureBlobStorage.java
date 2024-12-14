@@ -3,23 +3,14 @@ package com.psd.storage;
 import com.azure.core.http.rest.PagedIterable;
 import com.azure.identity.ClientSecretCredential;
 import com.azure.identity.ClientSecretCredentialBuilder;
-import com.azure.storage.blob.BlobClient;
-import com.azure.storage.blob.BlobContainerClient;
-import com.azure.storage.blob.BlobContainerClientBuilder;
-import com.azure.storage.blob.BlobServiceClient;
-import com.azure.storage.blob.BlobServiceClientBuilder;
+import com.azure.storage.blob.*;
 import com.azure.storage.blob.models.BlobItem;
-import com.psd.entities.User;
-import com.psd.services.SerializationService;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
-import java.io.IOException;
 import java.io.InputStream;
 import java.math.BigInteger;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 public class AzureBlobStorage {
@@ -74,7 +65,7 @@ public class AzureBlobStorage {
         if (!userContainer.exists()) {
             userContainer.create();
             System.out.println("Created container: " + containerName);
-        }else {
+        } else {
             System.out.println("Container already exists for user: " + userId);
         }
         userContainerClient = userContainer;
@@ -85,8 +76,8 @@ public class AzureBlobStorage {
     /**
      * Saves a share of the key into the user's Azure Blob container.
      *
-     * @param userId   The ID of the user whose container the share will be saved into.
-     * @param shareId  The unique identifier for the share.
+     * @param userId    The ID of the user whose container the share will be saved into.
+     * @param shareId   The unique identifier for the share.
      * @param shareData The share data as a Base64-encoded string.
      */
     public void saveKeyShare(String userId, String shareId, BigInteger shareData) {
@@ -203,8 +194,8 @@ public class AzureBlobStorage {
     /**
      * Saves an encrypted word and its metadata to the `dictionaries` folder in the user's Azure Blob container.
      *
-     * @param userId          The ID of the user whose container will be updated.
-     * @param encryptedWord   The encrypted word to save.
+     * @param userId            The ID of the user whose container will be updated.
+     * @param encryptedWord     The encrypted word to save.
      * @param encryptedMetadata The encrypted metadata associated with the word.
      */
     public void saveWordToDic(String userId, String encryptedWord, String encryptedMetadata) {
@@ -285,9 +276,9 @@ public class AzureBlobStorage {
     /**
      * Saves an encrypted conversation to a user-specific container.
      *
-     * @param conversationKey The unique key for the conversation.
+     * @param conversationKey       The unique key for the conversation.
      * @param encryptedConversation The encrypted conversation string to save.
-     * @param userId The ID of the user for whom the conversation is saved.
+     * @param userId                The ID of the user for whom the conversation is saved.
      */
     public void saveEncryptedConversation(String conversationKey, String encryptedConversation, String userId) {
 
@@ -311,7 +302,7 @@ public class AzureBlobStorage {
      * Loads an encrypted conversation from a user-specific container.
      *
      * @param conversationKey The unique key for the conversation.
-     * @param userId The ID of the user for whom the conversation is loaded.
+     * @param userId          The ID of the user for whom the conversation is loaded.
      * @return The encrypted conversation as a string, or null if not found.
      */
     public String loadEncryptedConversation(String conversationKey, String userId) {
@@ -322,7 +313,7 @@ public class AzureBlobStorage {
         }
 
         try (InputStream inputStream = blobClient.openInputStream();
-            ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+             ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
 
             byte[] buffer = new byte[1024];
             int length;
@@ -362,7 +353,7 @@ public class AzureBlobStorage {
                 // Retrieve the content of the blob (encrypted data)
                 BlobClient blobClient = userContainerClient.getBlobClient(conversationId);
                 try (InputStream inputStream = blobClient.openInputStream();
-                    ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream()) {
+                     ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream()) {
                     byte[] buffer = new byte[1024];
                     int length;
                     while ((length = inputStream.read(buffer)) != -1) {
@@ -384,7 +375,7 @@ public class AzureBlobStorage {
      * Deletes an encrypted conversation from a user-specific container.
      *
      * @param conversationKey The unique key for the conversation.
-     * @param userId The ID of the user for whom the conversation is deleted.
+     * @param userId          The ID of the user for whom the conversation is deleted.
      */
     public void deleteEncryptedConversation(String conversationKey, String userId) {
         BlobClient blobClient = userContainerClient.getBlobClient(conversationKey);

@@ -1,16 +1,9 @@
 package com.psd.services;
 
-import com.codahale.shamir.Scheme;
 import com.psd.entities.Share;
 
 import java.math.BigInteger;
-import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
-import java.util.Base64;
-import java.util.Map;
-
-import javax.crypto.KeyGenerator;
-import javax.crypto.SecretKey;
 
 public class SecretSharingService {
 
@@ -18,18 +11,19 @@ public class SecretSharingService {
     private static final int POLY_DEGREE = 1;   // Minimum shares required to reconstruct the key
     private static final BigInteger field = new BigInteger("8CF83642A709A097B447997640129DA299B1A47D1EB3750BA308B0FE64F5FBD3", 16);
     private static final SecureRandom rndGenerator = new SecureRandom();
+
     /**
      * Generates a random key, encrypts it, and splits it into shares using Shamir's Secret Sharing.
      *
      * @return A map where each key is a share index (integer) and the value is the Base64-encoded share.
      */
-
-    public static BigInteger generateKey(){
+    public static BigInteger generateKey() {
         return new BigInteger(field.bitLength() - 1, rndGenerator);
     }
 
     /**
      * This method shares a secret using Shamir's scheme.
+     *
      * @param secret Secret to share.
      * @return Shares of the secret.
      */
@@ -40,8 +34,8 @@ public class SecretSharingService {
         //TO COMPLETE: DONE
         polynomial[0] = secret;
 
-        for(int i = 1; i < polynomial.length; i++){
-            polynomial[i]=  new BigInteger(field.bitLength() - 1, rndGenerator);
+        for (int i = 1; i < polynomial.length; i++) {
+            polynomial[i] = new BigInteger(field.bitLength() - 1, rndGenerator);
         }
 
         //calculating shares
@@ -57,7 +51,8 @@ public class SecretSharingService {
 
     /**
      * This method combines shares, using Lagrange polynomials, to recover the secret.
-     * 	Lagrange polynomials: https://en.wikipedia.org/wiki/Lagrange_polynomial.
+     * Lagrange polynomials: https://en.wikipedia.org/wiki/Lagrange_polynomial.
+     *
      * @param shares Shares of the secret.
      * @return Recovered secret.
      */
@@ -86,8 +81,9 @@ public class SecretSharingService {
 
     /**
      * This method calculates a point on a polynomial using the Horner's method:
-     * 	https://en.wikipedia.org/wiki/Horner%27s_method.
-     * @param x X value.
+     * https://en.wikipedia.org/wiki/Horner%27s_method.
+     *
+     * @param x          X value.
      * @param polynomial Polynomial P(x).
      * @return Y value.
      */
@@ -95,7 +91,7 @@ public class SecretSharingService {
         BigInteger b = polynomial[polynomial.length - 1];
 
         //TO COMPLETE: DONE
-        for(int i = polynomial.length - 2; i >= 0; i--){
+        for (int i = polynomial.length - 2; i >= 0; i--) {
 
             b = polynomial[i].add(b.multiply(x)).mod(field);
 
