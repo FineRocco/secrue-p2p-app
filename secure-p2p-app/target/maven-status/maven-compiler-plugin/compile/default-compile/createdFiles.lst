@@ -1,11 +1,12 @@
-com\psd\services\EncriptionService.class
 com\psd\entities\Message.class
 com\psd\P2PServer$ClientHandler.class
 com\psd\services\SerializationService.class
 com\psd\CentralServer$ClientHandler.class
-com\psd\entities\Group.class
 com\psd\entities\MessageGroup.class
 com\psd\storage\AWS3Storage.class
+com\psd\services\SSLService.class
+com\psd\services\SecretSharingService.class
+com\psd\entities\Share.class
 com\psd\P2PServer.class
 com\psd\entities\Conversation.class
 com\psd\CentralServer.class
@@ -14,3 +15,4 @@ com\psd\entities\User.class
 com\psd\SecureP2PMessagingApp.class
 com\psd\storage\FirebaseStorage.class
 com\psd\P2PClient.class
+com\psd\services\EncryptionService.class
